@@ -20,7 +20,8 @@ Only processes extensions that were registered by the mpv-register helper (step 
 .\umpv.exe --register
 ```
 
->To set umpv as the default for each extension, go to Windows Settings > App > Default apps > mpv, and select umpv for the desired extensions.
+> [!NOTE] 
+> To set umpv as the default for each extension, go to Windows Settings > App > Default apps > mpv, and select umpv for the desired extensions.
 
 Without arguments, registers with the default loadfile mode (`replace`). Optionally specify a different mode:
 
