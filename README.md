@@ -16,11 +16,11 @@ Specify the extensions you want. Leave a category empty (`=`) to skip it.
 
 Only processes extensions that were registered by the mpv-register helper (step 1). 
 
-To set umpv as the default for each extension, go to Windows Settings > Default apps > mpv, and select umpv for the desired extensions.
-
 ```bat
 .\umpv.exe --register
 ```
+
+>To set umpv as the default for each extension, go to Windows Settings > App > Default apps > mpv, and select umpv for the desired extensions.
 
 Without arguments, registers with the default loadfile mode (`replace`). Optionally specify a different mode:
 
@@ -28,7 +28,7 @@ Without arguments, registers with the default loadfile mode (`replace`). Optiona
 .\umpv.exe --register --loadfile=append+play
 ```
 
-### 3. Remove umpv
+### 3. Unregister umpv
 
 ```bat
 .\umpv.exe --unregister

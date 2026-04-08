@@ -4,6 +4,8 @@ use std::env;
 use std::os::windows::ffi::OsStrExt;
 use std::process;
 
+use windows_sys::Win32::Foundation::ERROR_FILE_NOT_FOUND;
+
 mod mpv;
 mod pipe;
 mod registry;
@@ -15,15 +17,13 @@ pub fn encode_wide_string(string: &str) -> Vec<u16> {
         .collect()
 }
 
-fn parse_loadfile_arg(arguments: &[String]) -> Option<String> {
-    arguments.iter().find_map(|argument| {
-        argument.strip_prefix("--loadfile=").map(String::from)
-    })
+fn parse_loadfile_arg(arguments: &[String]) -> Option<&str> {
+    arguments
+        .iter()
+        .find_map(|argument| argument.strip_prefix("--loadfile="))
 }
 
 fn main() {
-    use windows_sys::Win32::Foundation::ERROR_FILE_NOT_FOUND;
-
     unsafe {
         windows_sys::Win32::UI::HiDpi::SetProcessDpiAwareness(
             windows_sys::Win32::UI::HiDpi::PROCESS_PER_MONITOR_DPI_AWARE,
@@ -34,11 +34,13 @@ fn main() {
 
     match arguments.first().map(String::as_str) {
         Some("--register") => {
-            let loadfile = parse_loadfile_arg(&arguments);
-            registry::register(loadfile.as_deref());
+            registry::register(parse_loadfile_arg(&arguments));
             return;
         }
-        Some("--unregister") => { registry::unregister(); return; }
+        Some("--unregister") => {
+            registry::unregister();
+            return;
+        }
         _ => {}
     }
 
@@ -46,8 +48,7 @@ fn main() {
         return;
     }
 
-    let loadfile = parse_loadfile_arg(&arguments);
-    let loadfile = loadfile.as_deref().unwrap_or("replace");
+    let loadfile = parse_loadfile_arg(&arguments).unwrap_or("replace");
 
     let files: Vec<String> = arguments
         .iter()

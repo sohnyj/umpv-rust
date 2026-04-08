@@ -1,6 +1,4 @@
-use std::env;
 use std::os::windows::process::CommandExt;
-use std::path::PathBuf;
 use std::process::Command;
 use windows_sys::Win32::System::Threading::CREATE_NEW_PROCESS_GROUP;
 use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, SetForegroundWindow};
@@ -8,18 +6,18 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, SetForegroundWind
 use crate::pipe;
 use crate::encode_wide_string;
 
-fn check_url(string: &str) -> bool {
-    let Some((prefix, _)) = string.split_once("://") else {
+fn is_url(string: &str) -> bool {
+    let Some((scheme, _)) = string.split_once("://") else {
         return false;
     };
-    !prefix.is_empty()
-        && prefix
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || character == '_')
+    !scheme.is_empty()
+        && scheme
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
 }
 
 pub fn resolve_file_path(argument: &str) -> String {
-    if check_url(argument) {
+    if is_url(argument) {
         return argument.to_string();
     }
     match std::path::absolute(argument) {
@@ -28,24 +26,19 @@ pub fn resolve_file_path(argument: &str) -> String {
     }
 }
 
-fn find_mpv_path() -> PathBuf {
-    if let Ok(executable) = env::current_exe() {
-        if let Some(directory) = executable.parent() {
-            return directory.join("mpv.exe");
-        }
-    }
-    PathBuf::from("mpv.exe")
-}
-
 pub fn launch_mpv() {
-    let mpv_path = find_mpv_path();
-    let mut command = Command::new(&mpv_path);
-    command.arg("--profile=builtin-pseudo-gui");
-    command.arg(format!("--input-ipc-server={}", pipe::PIPE_PATH));
+    let mpv_path = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join("mpv.exe")))
+        .unwrap_or_else(|| "mpv.exe".into());
 
-    command.creation_flags(CREATE_NEW_PROCESS_GROUP);
+    let status = Command::new(&mpv_path)
+        .arg("--profile=builtin-pseudo-gui")
+        .arg(format!("--input-ipc-server={}", pipe::PIPE_PATH))
+        .creation_flags(CREATE_NEW_PROCESS_GROUP)
+        .spawn();
 
-    if command.spawn().is_err() {
+    if status.is_err() {
         std::process::exit(1);
     }
 }

@@ -145,29 +145,29 @@ pub fn register(loadfile: Option<&str>) {
     }
 
     let umpv_path = get_executable_path();
-    let command = match loadfile {
-        Some(loadfile) => format!("\"{}\" --loadfile={} -- \"%L\"", umpv_path, loadfile),
-        None => format!("\"{}\" -- \"%L\"", umpv_path),
-    };
+    let loadfile = loadfile.unwrap_or("replace");
+    let command = format!("\"{}\" --loadfile={} -- \"%L\"", umpv_path, loadfile);
     let command_key = format!("{}\\shell\\open\\command", KEY_UMPV_PROG_ID);
     set_registry_value(HKEY_CURRENT_USER, KEY_UMPV_PROG_ID, None, "");
     set_registry_value(HKEY_CURRENT_USER, &command_key, None, &command);
 
-    let mut count = 0usize;
-    for (extension, _) in &associations {
-        if set_registry_value(
-            HKEY_CURRENT_USER,
-            KEY_CAPABILITIES_FILE_ASSOCIATIONS,
-            Some(extension),
-            UMPV_PROG_ID,
-        ) {
-            count += 1;
-        }
-    }
+    let count = associations
+        .iter()
+        .filter(|(extension, _)| {
+            set_registry_value(
+                HKEY_CURRENT_USER,
+                KEY_CAPABILITIES_FILE_ASSOCIATIONS,
+                Some(extension),
+                UMPV_PROG_ID,
+            )
+        })
+        .count();
 
     notify_shell_change();
-    let loadfile_display = loadfile.unwrap_or("replace");
-    show_message_box(&format!("umpv registered for {} file extension(s).\nloadfile: {}", count, loadfile_display));
+    show_message_box(&format!(
+        "umpv registered for {} file extension(s).\nloadfile: {}",
+        count, loadfile
+    ));
 }
 
 pub fn unregister() {
@@ -181,19 +181,18 @@ pub fn unregister() {
         return;
     }
 
-    let mut count = 0usize;
-    for (extension, value) in &associations {
-        if value == UMPV_PROG_ID {
-            if set_registry_value(
+    let count = associations
+        .iter()
+        .filter(|(_, value)| value == UMPV_PROG_ID)
+        .filter(|(extension, _)| {
+            set_registry_value(
                 HKEY_CURRENT_USER,
                 KEY_CAPABILITIES_FILE_ASSOCIATIONS,
                 Some(extension),
                 MPV_PROG_ID,
-            ) {
-                count += 1;
-            }
-        }
-    }
+            )
+        })
+        .count();
 
     delete_registry_tree(HKEY_CURRENT_USER, KEY_UMPV_PROG_ID);
 
