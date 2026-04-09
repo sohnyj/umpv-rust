@@ -7,13 +7,7 @@ use crate::pipe;
 use crate::encode_wide_string;
 
 fn is_url(string: &str) -> bool {
-    let Some((scheme, _)) = string.split_once("://") else {
-        return false;
-    };
-    !scheme.is_empty()
-        && scheme
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+    string.contains("://")
 }
 
 pub fn resolve_file_path(argument: &str) -> String {
