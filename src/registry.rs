@@ -147,12 +147,26 @@ pub fn register(loadfile: Option<&str>) {
     let umpv_path = get_executable_path();
     let loadfile = loadfile.unwrap_or("replace");
 
-    if matches!(loadfile, "insert-at" | "insert-at-play") {
-        show_message_box(&format!(
-            "Unsupported loadfile flag: {}\nThis flag requires an index argument.",
-            loadfile
-        ));
+    if !matches!(
+        loadfile,
+        "replace"
+            | "append"
+            | "append+play"
+            | "append-play"
+            | "insert-next"
+            | "insert-next+play"
+            | "insert-next-play"
+    ) {
+        show_message_box(&format!("Unsupported loadfile flag: {}", loadfile));
         std::process::exit(1);
+    }
+
+    if matches!(loadfile, "append-play" | "insert-next-play") {
+        let replacement = loadfile.replacen("-play", "+play", 1);
+        show_message_box(&format!(
+            "Warning: '{}' is deprecated since mpv 0.42.\nUse '{}' instead.",
+            loadfile, replacement
+        ));
     }
     let command = format!("\"{}\" --loadfile={} -- \"%L\"", umpv_path, loadfile);
     let command_key = format!("{}\\shell\\open\\command", KEY_UMPV_PROG_ID);

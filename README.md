@@ -45,11 +45,23 @@ The `--loadfile=<value>` option controls how files are added to the mpv playlist
 |-------|-------------|
 | `replace` | Stop current playback and play the new file (default) |
 | `append` | Append to the end of the playlist |
-| `append+play` | Append, and start playback if nothing is playing |
+| `append+play` | Append, and force playback to start |
 | `insert-next` | Insert after the current item |
-| `insert-next+play` | Insert after the current item, and start playback if nothing is playing |
+| `insert-next+play` | Insert after the current item, and force playback to start |
+
+The following flags (deprecated since mpv 0.42) are also accepted:
+
+| Value | Description |
+|-------|-------------|
+| `append-play` | Equivalent to `append+play` |
+| `insert-next-play` | Equivalent to `insert-next+play` |
+
+| Value | Description |
+|-------|-------------|
 | `insert-at` | Not supported (requires an index argument) |
 | `insert-at+play` | Not supported (requires an index argument) |
+
+URLs (`scheme://...`) are passed through to mpv as-is without path resolution.
 
 See the [mpv documentation](https://mpv.io/manual/master/#command-interface-[%3Coptions%3E]]]) for the full list of options.
 
