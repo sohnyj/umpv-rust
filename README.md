@@ -56,10 +56,12 @@ The following flags (deprecated since mpv 0.42) are also accepted:
 | `append-play` | Equivalent to `append+play` |
 | `insert-next-play` | Equivalent to `insert-next+play` |
 
+The following flags are not supported:
+
 | Value | Description |
 |-------|-------------|
-| `insert-at` | Not supported (requires an index argument) |
-| `insert-at+play` | Not supported (requires an index argument) |
+| `insert-at` | Requires an index argument |
+| `insert-at+play` | Requires an index argument |
 
 URLs (`scheme://...`) are passed through to mpv as-is without path resolution.
 
