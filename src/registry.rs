@@ -196,13 +196,6 @@ pub fn unregister() {
     let associations =
         enumerate_registry_values(HKEY_CURRENT_USER, KEY_CAPABILITIES_FILE_ASSOCIATIONS);
 
-    if associations.is_empty() {
-        delete_registry_tree(HKEY_CURRENT_USER, KEY_UMPV_PROG_ID);
-        notify_shell_change();
-        show_message_box("Nothing to unregister.");
-        return;
-    }
-
     let count = associations
         .iter()
         .filter(|(_, value)| value == UMPV_PROG_ID)
@@ -216,10 +209,16 @@ pub fn unregister() {
         })
         .count();
 
+    if count == 0 {
+        show_message_box("Nothing to unregister.");
+        return;
+    }
+
     delete_registry_tree(HKEY_CURRENT_USER, KEY_UMPV_PROG_ID);
 
     notify_shell_change();
-    show_message_box(
-        &format!("umpv unregistered.\n{} extension(s) restored to mpv.", count),
-    );
+    show_message_box(&format!(
+        "umpv unregistered.\n{} extension(s) restored to mpv.",
+        count
+    ));
 }
