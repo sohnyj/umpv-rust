@@ -146,6 +146,14 @@ pub fn register(loadfile: Option<&str>) {
 
     let umpv_path = get_executable_path();
     let loadfile = loadfile.unwrap_or("replace");
+
+    if matches!(loadfile, "insert-at" | "insert-at-play") {
+        show_message_box(&format!(
+            "Unsupported loadfile flag: {}\nThis flag requires an index argument.",
+            loadfile
+        ));
+        std::process::exit(1);
+    }
     let command = format!("\"{}\" --loadfile={} -- \"%L\"", umpv_path, loadfile);
     let command_key = format!("{}\\shell\\open\\command", KEY_UMPV_PROG_ID);
     set_registry_value(HKEY_CURRENT_USER, KEY_UMPV_PROG_ID, None, "");

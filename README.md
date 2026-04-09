@@ -1,6 +1,6 @@
 # umpv-rust
 
-A single-instance mpv launcher for Windows, written in Rust. Opens files in a running mpv window via named pipe IPC, or launches a new instance if none is running.
+A single-instance mpv launcher for Windows, written in Rust. Based on the [umpv](https://github.com/mpv-player/mpv/blob/master/TOOLS/umpv) Python script from the mpv project. Opens files in a running mpv window via named pipe IPC, or launches a new instance if none is running.
 
 ## Usage
 
@@ -48,6 +48,8 @@ The `--loadfile=<value>` option controls how files are added to the mpv playlist
 | `append+play` | Append, and start playback if nothing is playing |
 | `insert-next` | Insert after the current item |
 | `insert-next+play` | Insert after the current item, and start playback if nothing is playing |
+| `insert-at` | Not supported (requires an index argument) |
+| `insert-at+play` | Not supported (requires an index argument) |
 
 See the [mpv documentation](https://mpv.io/manual/master/#command-interface-[%3Coptions%3E]]]) for the full list of options.
 
