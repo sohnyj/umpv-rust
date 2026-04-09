@@ -2,7 +2,7 @@ use windows_sys::Win32::System::Registry::*;
 use windows_sys::Win32::UI::Shell::{SHChangeNotify, SHCNE_ASSOCCHANGED, SHCNF_IDLIST};
 use windows_sys::Win32::UI::WindowsAndMessaging::MessageBoxW;
 
-use crate::encode_wide_string;
+use crate::{encode_wide_string, DEFAULT_LOADFILE};
 
 const KEY_CAPABILITIES_FILE_ASSOCIATIONS: &str =
     r"Software\Clients\Media\mpv\Capabilities\FileAssociations";
@@ -31,15 +31,6 @@ fn get_executable_path() -> String {
 
 fn set_registry_value(key: HKEY, sub_key: &str, name: Option<&str>, value: &str) -> bool {
     let sub_key_wide = encode_wide_string(sub_key);
-    let value_wide = encode_wide_string(value);
-    let name_wide;
-    let name_pointer = match name {
-        Some(name_string) => {
-            name_wide = encode_wide_string(name_string);
-            name_wide.as_ptr()
-        }
-        None => std::ptr::null(),
-    };
     unsafe {
         let mut opened_key: HKEY = std::ptr::null_mut();
         if RegCreateKeyExW(
@@ -56,16 +47,31 @@ fn set_registry_value(key: HKEY, sub_key: &str, name: Option<&str>, value: &str)
         {
             return false;
         }
-        let success = RegSetValueExW(
+        let success = set_value(opened_key, name, value);
+        RegCloseKey(opened_key);
+        success
+    }
+}
+
+fn set_value(opened_key: HKEY, name: Option<&str>, value: &str) -> bool {
+    let value_wide = encode_wide_string(value);
+    let name_wide;
+    let name_pointer = match name {
+        Some(name_string) => {
+            name_wide = encode_wide_string(name_string);
+            name_wide.as_ptr()
+        }
+        None => std::ptr::null(),
+    };
+    unsafe {
+        RegSetValueExW(
             opened_key,
             name_pointer,
             0,
             REG_SZ,
             value_wide.as_ptr() as *const u8,
             (value_wide.len() * 2) as u32,
-        ) == 0;
-        RegCloseKey(opened_key);
-        success
+        ) == 0
     }
 }
 
@@ -120,6 +126,35 @@ fn enumerate_registry_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> 
     results
 }
 
+fn set_associations(extensions: impl IntoIterator<Item = impl AsRef<str>>, prog_id: &str) -> usize {
+    let sub_key_wide = encode_wide_string(KEY_CAPABILITIES_FILE_ASSOCIATIONS);
+    unsafe {
+        let mut opened_key: HKEY = std::ptr::null_mut();
+        if RegCreateKeyExW(
+            HKEY_CURRENT_USER,
+            sub_key_wide.as_ptr(),
+            0,
+            std::ptr::null(),
+            REG_OPTION_NON_VOLATILE,
+            KEY_WRITE,
+            std::ptr::null(),
+            &mut opened_key,
+            std::ptr::null_mut(),
+        ) != 0
+        {
+            return 0;
+        }
+        let mut count = 0;
+        for extension in extensions {
+            if set_value(opened_key, Some(extension.as_ref()), prog_id) {
+                count += 1;
+            }
+        }
+        RegCloseKey(opened_key);
+        count
+    }
+}
+
 fn delete_registry_tree(key: HKEY, sub_key: &str) {
     let sub_key_wide = encode_wide_string(sub_key);
     unsafe { RegDeleteTreeW(key, sub_key_wide.as_ptr()) };
@@ -145,7 +180,7 @@ pub fn register(loadfile: Option<&str>) {
     }
 
     let umpv_path = get_executable_path();
-    let loadfile = loadfile.unwrap_or("replace");
+    let loadfile = loadfile.unwrap_or(DEFAULT_LOADFILE);
 
     if !matches!(
         loadfile,
@@ -173,17 +208,7 @@ pub fn register(loadfile: Option<&str>) {
     set_registry_value(HKEY_CURRENT_USER, KEY_UMPV_PROG_ID, None, "");
     set_registry_value(HKEY_CURRENT_USER, &command_key, None, &command);
 
-    let count = associations
-        .iter()
-        .filter(|(extension, _)| {
-            set_registry_value(
-                HKEY_CURRENT_USER,
-                KEY_CAPABILITIES_FILE_ASSOCIATIONS,
-                Some(extension),
-                UMPV_PROG_ID,
-            )
-        })
-        .count();
+    let count = set_associations(associations.iter().map(|(ext, _)| ext), UMPV_PROG_ID);
 
     notify_shell_change();
     show_message_box(&format!(
@@ -196,23 +221,17 @@ pub fn unregister() {
     let associations =
         enumerate_registry_values(HKEY_CURRENT_USER, KEY_CAPABILITIES_FILE_ASSOCIATIONS);
 
-    let count = associations
+    let umpv_associations: Vec<_> = associations
         .iter()
         .filter(|(_, value)| value == UMPV_PROG_ID)
-        .filter(|(extension, _)| {
-            set_registry_value(
-                HKEY_CURRENT_USER,
-                KEY_CAPABILITIES_FILE_ASSOCIATIONS,
-                Some(extension),
-                MPV_PROG_ID,
-            )
-        })
-        .count();
+        .collect();
 
-    if count == 0 {
+    if umpv_associations.is_empty() {
         show_message_box("Nothing to unregister.");
         return;
     }
+
+    let count = set_associations(umpv_associations.iter().map(|(ext, _)| ext), MPV_PROG_ID);
 
     delete_registry_tree(HKEY_CURRENT_USER, KEY_UMPV_PROG_ID);
 

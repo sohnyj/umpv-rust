@@ -10,6 +10,8 @@ mod mpv;
 mod pipe;
 mod registry;
 
+pub const DEFAULT_LOADFILE: &str = "replace";
+
 pub fn encode_wide_string(string: &str) -> Vec<u16> {
     std::ffi::OsStr::new(string)
         .encode_wide()
@@ -48,7 +50,7 @@ fn main() {
         return;
     }
 
-    let loadfile = parse_loadfile_arg(&arguments).unwrap_or("replace");
+    let loadfile = parse_loadfile_arg(&arguments).unwrap_or(DEFAULT_LOADFILE);
 
     let files: Vec<String> = arguments
         .iter()
