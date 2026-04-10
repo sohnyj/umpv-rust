@@ -4,13 +4,16 @@ A single-instance mpv launcher for Windows, written in Rust. Based on the [umpv]
 
 ## Usage
 
-### 1. Register file associations with mpv (mpv-register helper)
+### 1. Register file associations with mpv ([mpv-register helper](https://mpv.io/manual/master/#options-register))
 
 ```bat
-.\mpv.com --register --video-exts=mkv,mp4 --audio-exts= --image-exts= --archive-exts= --playlist-exts=
+.\mpv.com --register --video-exts=mp4,mkv --audio-exts= --image-exts= --archive-exts= --playlist-exts=
 ```
 
 Specify the extensions you want. Leave a category empty (`=`) to skip it.
+
+> [!NOTE]
+> Running the register command with administrator privileges is not recommended.
 
 ### 2. Add umpv to mpv's registered extensions
 
@@ -20,7 +23,8 @@ Only processes extensions that were registered by the mpv-register helper (step 
 .\umpv.exe --register
 ```
 
-> [!NOTE] 
+> [!NOTE]
+> umpv only supports per-user file associations (`HKEY_CURRENT_USER`). System-wide associations are not supported.
 > To set umpv as the default for each extension, go to Windows Settings > App > Default apps > mpv, and select umpv for the desired extensions.
 
 Without arguments, registers with the default loadfile mode (`replace`). Optionally specify a different mode:
@@ -35,7 +39,7 @@ Without arguments, registers with the default loadfile mode (`replace`). Optiona
 .\umpv.exe --unregister
 ```
 
-Restores all registered extensions back to mpv defaults.
+Removes umpv file associations from the registry. Does not restore previous defaults.
 
 ## Options
 
@@ -60,8 +64,8 @@ The following flags are not supported:
 
 | Value | Description |
 |-------|-------------|
-| `insert-at` | Requires an index argument |
-| `insert-at+play` | Requires an index argument |
+| `insert-at` | umpv alone cannot determine the playlist index |
+| `insert-at+play` | umpv alone cannot determine the playlist index |
 
 URLs (`scheme://...`) are passed through to mpv as-is without path resolution.
 

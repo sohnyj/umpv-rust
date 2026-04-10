@@ -47,13 +47,13 @@ fn set_registry_value(key: HKEY, sub_key: &str, name: Option<&str>, value: &str)
         {
             return false;
         }
-        let success = set_value(opened_key, name, value);
+        let success = write_value(opened_key, name, value);
         RegCloseKey(opened_key);
         success
     }
 }
 
-fn set_value(opened_key: HKEY, name: Option<&str>, value: &str) -> bool {
+fn write_value(opened_key: HKEY, name: Option<&str>, value: &str) -> bool {
     let value_wide = encode_wide_string(value);
     let name_wide;
     let name_pointer = match name {
@@ -146,7 +146,7 @@ fn set_associations(extensions: impl IntoIterator<Item = impl AsRef<str>>, prog_
         }
         let mut count = 0;
         for extension in extensions {
-            if set_value(opened_key, Some(extension.as_ref()), prog_id) {
+            if write_value(opened_key, Some(extension.as_ref()), prog_id) {
                 count += 1;
             }
         }
