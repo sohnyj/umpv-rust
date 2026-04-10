@@ -237,7 +237,7 @@ pub fn unregister() {
 
     notify_shell_change();
     show_message_box(&format!(
-        "umpv unregistered.\n{} extension(s) restored to mpv.",
+        "umpv unregistered for {} file extension(s).",
         count
     ));
 }
