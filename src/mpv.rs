@@ -27,7 +27,6 @@ pub fn launch_mpv() {
         .unwrap_or_else(|| "mpv.exe".into());
 
     let status = Command::new(&mpv_path)
-        .arg("--profile=builtin-pseudo-gui")
         .arg(format!("--input-ipc-server={}", pipe::PIPE_PATH))
         .creation_flags(CREATE_NEW_PROCESS_GROUP)
         .spawn();
