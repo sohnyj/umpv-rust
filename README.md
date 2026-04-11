@@ -4,6 +4,8 @@ A single-instance mpv launcher for Windows, written in Rust. Based on the [umpv]
 
 ## Usage
 
+**Place umpv.exe in the same directory as mpv.exe**
+
 ### 1. Register file associations with mpv ([mpv-register helper](https://mpv.io/manual/master/#options-register))
 
 ```bat
