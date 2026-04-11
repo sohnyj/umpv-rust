@@ -21,10 +21,12 @@ pub fn resolve_file_path(argument: &str) -> String {
 }
 
 pub fn launch_mpv() {
-    let mpv_path = std::env::current_exe()
+    let Some(mpv_path) = std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(|dir| dir.join("mpv.exe")))
-        .unwrap_or_else(|| "mpv.exe".into());
+    else {
+        std::process::exit(1);
+    };
 
     let status = Command::new(&mpv_path)
         .arg(format!("--input-ipc-server={}", pipe::PIPE_PATH))
