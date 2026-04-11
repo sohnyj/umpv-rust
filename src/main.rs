@@ -70,7 +70,7 @@ fn main() {
             mpv::launch_mpv();
             match pipe::open_pipe_retry() {
                 Ok(handle) => pipe::send_file_commands(handle, &files, loadfile),
-                Err(_) => Ok(()),
+                Err(_) => Err(()),
             }
         }
         Err(_) => {
