@@ -29,7 +29,7 @@ fn get_executable_path() -> String {
         .unwrap_or_else(|_| "umpv.exe".to_string())
 }
 
-fn set_registry_value(key: HKEY, sub_key: &str, name: Option<&str>, value: &str) -> bool {
+fn create_or_open_key(key: HKEY, sub_key: &str) -> Option<HKEY> {
     let sub_key_wide = encode_wide_string(sub_key);
     unsafe {
         let mut opened_key: HKEY = std::ptr::null_mut();
@@ -45,12 +45,19 @@ fn set_registry_value(key: HKEY, sub_key: &str, name: Option<&str>, value: &str)
             std::ptr::null_mut(),
         ) != 0
         {
-            return false;
+            return None;
         }
-        let success = write_value(opened_key, name, value);
-        RegCloseKey(opened_key);
-        success
+        Some(opened_key)
     }
+}
+
+fn set_registry_value(key: HKEY, sub_key: &str, name: Option<&str>, value: &str) -> bool {
+    let Some(opened_key) = create_or_open_key(key, sub_key) else {
+        return false;
+    };
+    let success = write_value(opened_key, name, value);
+    unsafe { RegCloseKey(opened_key) };
+    success
 }
 
 fn write_value(opened_key: HKEY, name: Option<&str>, value: &str) -> bool {
@@ -127,32 +134,18 @@ fn enumerate_registry_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> 
 }
 
 fn set_associations(extensions: impl IntoIterator<Item = impl AsRef<str>>, prog_id: &str) -> usize {
-    let sub_key_wide = encode_wide_string(KEY_CAPABILITIES_FILE_ASSOCIATIONS);
-    unsafe {
-        let mut opened_key: HKEY = std::ptr::null_mut();
-        if RegCreateKeyExW(
-            HKEY_CURRENT_USER,
-            sub_key_wide.as_ptr(),
-            0,
-            std::ptr::null(),
-            REG_OPTION_NON_VOLATILE,
-            KEY_WRITE,
-            std::ptr::null(),
-            &mut opened_key,
-            std::ptr::null_mut(),
-        ) != 0
-        {
-            return 0;
+    let Some(opened_key) = create_or_open_key(HKEY_CURRENT_USER, KEY_CAPABILITIES_FILE_ASSOCIATIONS)
+    else {
+        return 0;
+    };
+    let mut count = 0;
+    for extension in extensions {
+        if write_value(opened_key, Some(extension.as_ref()), prog_id) {
+            count += 1;
         }
-        let mut count = 0;
-        for extension in extensions {
-            if write_value(opened_key, Some(extension.as_ref()), prog_id) {
-                count += 1;
-            }
-        }
-        RegCloseKey(opened_key);
-        count
     }
+    unsafe { RegCloseKey(opened_key) };
+    count
 }
 
 fn delete_registry_tree(key: HKEY, sub_key: &str) {
