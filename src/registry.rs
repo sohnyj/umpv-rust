@@ -51,15 +51,6 @@ fn create_or_open_key(key: HKEY, sub_key: &str) -> Option<HKEY> {
     }
 }
 
-fn set_value(key: HKEY, sub_key: &str, name: Option<&str>, data: &str) -> bool {
-    let Some(opened_key) = create_or_open_key(key, sub_key) else {
-        return false;
-    };
-    let success = write_value(opened_key, name, data);
-    unsafe { RegCloseKey(opened_key) };
-    success
-}
-
 fn write_value(opened_key: HKEY, name: Option<&str>, data: &str) -> bool {
     let data_wide = encode_wide_string(data);
     let name_wide;
@@ -80,6 +71,15 @@ fn write_value(opened_key: HKEY, name: Option<&str>, data: &str) -> bool {
             (data_wide.len() * std::mem::size_of::<u16>()) as u32,
         ) == 0
     }
+}
+
+fn set_value(key: HKEY, sub_key: &str, name: Option<&str>, data: &str) -> bool {
+    let Some(opened_key) = create_or_open_key(key, sub_key) else {
+        return false;
+    };
+    let success = write_value(opened_key, name, data);
+    unsafe { RegCloseKey(opened_key) };
+    success
 }
 
 fn enum_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> {
@@ -123,7 +123,7 @@ fn enum_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> {
             if status == 0 && value_type == REG_SZ && name_length > 0 {
                 let name = String::from_utf16_lossy(&name_buffer[..name_length as usize]);
                 if name.starts_with('.') && name.len() > 1 {
-                    let data_char_count = data_length as usize / 2;
+                    let data_char_count = data_length as usize / std::mem::size_of::<u16>();
                     let data = if data_char_count > 0 && data_buffer[data_char_count - 1] == 0 {
                         String::from_utf16_lossy(&data_buffer[..data_char_count - 1])
                     } else {
