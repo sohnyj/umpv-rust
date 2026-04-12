@@ -58,7 +58,7 @@ fn main() {
         .map(|argument| mpv::resolve_file_path(argument))
         .collect();
 
-    let Some(expected_mpv) = mpv::expected_mpv_path() else {
+    let Some(expected_mpv) = mpv::resolve_mpv_path() else {
         process::exit(1);
     };
 

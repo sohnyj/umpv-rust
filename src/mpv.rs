@@ -22,14 +22,14 @@ pub fn resolve_file_path(argument: &str) -> String {
     }
 }
 
-pub fn expected_mpv_path() -> Option<PathBuf> {
+pub fn resolve_mpv_path() -> Option<PathBuf> {
     std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(|dir| dir.join("mpv.exe")))
 }
 
 pub fn launch_mpv() {
-    let Some(mpv_path) = expected_mpv_path() else {
+    let Some(mpv_path) = resolve_mpv_path() else {
         std::process::exit(1);
     };
 
