@@ -17,6 +17,7 @@ pub const PIPE_PATH: &str = r"\\.\pipe\umpv";
 const MUTEX_NAME: &str = "umpv_mutex";
 const RETRY_INTERVAL_MS: u64 = 100;
 const RETRY_MAX_ATTEMPTS: u32 = 50;
+const MUTEX_WAIT_TIMEOUT_MS: u32 = 10_000;
 
 fn open_pipe_handle(pipe_path_wide: &[u16]) -> HANDLE {
     unsafe {
@@ -104,8 +105,6 @@ pub fn send_file_commands(handle: HANDLE, files: &[String], loadfile: &str) -> R
     unsafe { CloseHandle(handle) };
     Ok(())
 }
-
-const MUTEX_WAIT_TIMEOUT_MS: u32 = 10_000;
 
 pub fn acquire_global_mutex() -> HANDLE {
     let mutex_name_wide = encode_wide_string(MUTEX_NAME);
