@@ -22,7 +22,7 @@ pub fn resolve_file_path(argument: &str) -> String {
     }
 }
 
-pub fn resolve_mpv_path() -> Option<PathBuf> {
+fn resolve_mpv_path() -> Option<PathBuf> {
     std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(|dir| dir.join("mpv.exe")))
