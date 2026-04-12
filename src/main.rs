@@ -58,18 +58,34 @@ fn main() {
         .map(|argument| mpv::resolve_file_path(argument))
         .collect();
 
+    let Some(expected_mpv) = mpv::expected_mpv_path() else {
+        process::exit(1);
+    };
+
     let mutex = pipe::acquire_global_mutex();
 
     let mut existing = false;
     let result = match pipe::open_pipe() {
         Ok(handle) => {
+            if !pipe::verify_pipe_server(handle, &expected_mpv) {
+                pipe::close_pipe(handle);
+                pipe::release_global_mutex(mutex);
+                process::exit(1);
+            }
             existing = true;
             pipe::send_file_commands(handle, &files, loadfile)
         }
         Err(ERROR_FILE_NOT_FOUND) => {
             mpv::launch_mpv();
             match pipe::open_pipe_retry() {
-                Ok(handle) => pipe::send_file_commands(handle, &files, loadfile),
+                Ok(handle) => {
+                    if !pipe::verify_pipe_server(handle, &expected_mpv) {
+                        pipe::close_pipe(handle);
+                        Err(())
+                    } else {
+                        pipe::send_file_commands(handle, &files, loadfile)
+                    }
+                }
                 Err(_) => Err(()),
             }
         }

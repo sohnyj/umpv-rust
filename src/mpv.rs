@@ -1,5 +1,7 @@
 use std::os::windows::process::CommandExt;
+use std::path::PathBuf;
 use std::process::Command;
+
 use windows_sys::Win32::System::Threading::CREATE_NEW_PROCESS_GROUP;
 use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, SetForegroundWindow};
 
@@ -20,11 +22,14 @@ pub fn resolve_file_path(argument: &str) -> String {
     }
 }
 
-pub fn launch_mpv() {
-    let Some(mpv_path) = std::env::current_exe()
+pub fn expected_mpv_path() -> Option<PathBuf> {
+    std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(|dir| dir.join("mpv.exe")))
-    else {
+}
+
+pub fn launch_mpv() {
+    let Some(mpv_path) = expected_mpv_path() else {
         std::process::exit(1);
     };
 

@@ -77,12 +77,15 @@ fn write_value(opened_key: HKEY, name: Option<&str>, value: &str) -> bool {
             0,
             REG_SZ,
             value_wide.as_ptr() as *const u8,
-            (value_wide.len() * 2) as u32,
+            (value_wide.len() * std::mem::size_of::<u16>()) as u32,
         ) == 0
     }
 }
 
 fn enumerate_registry_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> {
+    const ERROR_NO_MORE_ITEMS: u32 = 259;
+    const ERROR_MORE_DATA: u32 = 234;
+
     let sub_key_wide = encode_wide_string(sub_key);
     let mut results = Vec::new();
     unsafe {
@@ -108,13 +111,16 @@ fn enumerate_registry_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> 
                 &mut value_type,
                 data_buffer.as_mut_ptr() as *mut u8,
                 &mut data_length,
-            );
+            ) as u32;
 
-            if status != 0 {
+            if status == ERROR_NO_MORE_ITEMS {
+                break;
+            }
+            if status != 0 && status != ERROR_MORE_DATA {
                 break;
             }
 
-            if value_type == REG_SZ && name_length > 0 {
+            if status == 0 && value_type == REG_SZ && name_length > 0 {
                 let name = String::from_utf16_lossy(&name_buffer[..name_length as usize]);
                 if name.starts_with('.') && name.len() > 1 {
                     let data_char_count = data_length as usize / 2;

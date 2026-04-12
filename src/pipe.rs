@@ -1,14 +1,17 @@
+use std::path::{Path, PathBuf};
+
 use windows_sys::Win32::Foundation::{
-    CloseHandle, GetLastError, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE, ERROR_FILE_NOT_FOUND,
-    ERROR_PIPE_BUSY, WAIT_FAILED,
+    CloseHandle, GetLastError, ERROR_FILE_NOT_FOUND, ERROR_PIPE_BUSY, GENERIC_WRITE, HANDLE,
+    INVALID_HANDLE_VALUE, WAIT_ABANDONED, WAIT_OBJECT_0,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, WriteFile, FILE_ATTRIBUTE_NORMAL, OPEN_EXISTING, SECURITY_IDENTIFICATION,
     SECURITY_SQOS_PRESENT,
 };
-use windows_sys::Win32::System::Pipes::WaitNamedPipeW;
+use windows_sys::Win32::System::Pipes::{GetNamedPipeServerProcessId, WaitNamedPipeW};
 use windows_sys::Win32::System::Threading::{
-    CreateMutexW, ReleaseMutex, WaitForSingleObject, INFINITE,
+    CreateMutexW, OpenProcess, QueryFullProcessImageNameW, ReleaseMutex, WaitForSingleObject,
+    PROCESS_QUERY_LIMITED_INFORMATION,
 };
 
 use crate::encode_wide_string;
@@ -67,6 +70,42 @@ pub fn open_pipe_retry() -> Result<HANDLE, u32> {
     Err(ERROR_FILE_NOT_FOUND)
 }
 
+pub fn close_pipe(handle: HANDLE) {
+    unsafe { CloseHandle(handle) };
+}
+
+pub fn verify_pipe_server(handle: HANDLE, expected_exe: &Path) -> bool {
+    unsafe {
+        let mut server_pid: u32 = 0;
+        if GetNamedPipeServerProcessId(handle, &mut server_pid) == 0 {
+            return false;
+        }
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, server_pid);
+        if process.is_null() {
+            return false;
+        }
+        let mut buffer = [0u16; 32768];
+        let mut size: u32 = buffer.len() as u32;
+        let ok = QueryFullProcessImageNameW(process, 0, buffer.as_mut_ptr(), &mut size);
+        CloseHandle(process);
+        if ok == 0 {
+            return false;
+        }
+        let actual = PathBuf::from(String::from_utf16_lossy(&buffer[..size as usize]));
+        paths_equal_ignore_case(&actual, expected_exe)
+    }
+}
+
+fn paths_equal_ignore_case(a: &Path, b: &Path) -> bool {
+    let normalize = |path: &Path| {
+        std::fs::canonicalize(path)
+            .unwrap_or_else(|_| path.to_path_buf())
+            .to_string_lossy()
+            .to_lowercase()
+    };
+    normalize(a) == normalize(b)
+}
+
 fn write_pipe(handle: HANDLE, data: &[u8]) -> bool {
     unsafe {
         let mut bytes_written: u32 = 0;
@@ -105,6 +144,8 @@ pub fn send_file_commands(handle: HANDLE, files: &[String], loadfile: &str) -> R
     Ok(())
 }
 
+const MUTEX_WAIT_TIMEOUT_MS: u32 = 10_000;
+
 pub fn acquire_global_mutex() -> HANDLE {
     let mutex_name_wide = encode_wide_string(MUTEX_NAME);
     unsafe {
@@ -112,8 +153,8 @@ pub fn acquire_global_mutex() -> HANDLE {
         if handle.is_null() {
             std::process::exit(1);
         }
-        let wait_result = WaitForSingleObject(handle, INFINITE);
-        if wait_result == WAIT_FAILED {
+        let wait_result = WaitForSingleObject(handle, MUTEX_WAIT_TIMEOUT_MS);
+        if wait_result != WAIT_OBJECT_0 && wait_result != WAIT_ABANDONED {
             CloseHandle(handle);
             std::process::exit(1);
         }
