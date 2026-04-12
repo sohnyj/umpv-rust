@@ -19,10 +19,10 @@ pub fn encode_wide_string(string: &str) -> Vec<u16> {
         .collect()
 }
 
-fn parse_loadfile_arg(arguments: &[String]) -> Option<&str> {
-    arguments
+fn parse_loadfile_arg(args: &[String]) -> Option<&str> {
+    args
         .iter()
-        .find_map(|argument| argument.strip_prefix("--loadfile="))
+        .find_map(|arg| arg.strip_prefix("--loadfile="))
 }
 
 fn main() {
@@ -32,11 +32,11 @@ fn main() {
         )
     };
 
-    let arguments: Vec<String> = env::args().skip(1).collect();
+    let args: Vec<String> = env::args().skip(1).collect();
 
-    match arguments.first().map(String::as_str) {
+    match args.first().map(String::as_str) {
         Some("--register") => {
-            registry::register(parse_loadfile_arg(&arguments));
+            registry::register(parse_loadfile_arg(&args));
             return;
         }
         Some("--unregister") => {
@@ -46,16 +46,16 @@ fn main() {
         _ => {}
     }
 
-    if arguments.is_empty() {
+    if args.is_empty() {
         return;
     }
 
-    let loadfile = parse_loadfile_arg(&arguments).unwrap_or(DEFAULT_LOADFILE);
+    let loadfile = parse_loadfile_arg(&args).unwrap_or(DEFAULT_LOADFILE);
 
-    let files: Vec<String> = arguments
+    let files: Vec<String> = args
         .iter()
-        .filter(|argument| argument.as_str() != "--" && !argument.starts_with("--loadfile="))
-        .map(|argument| mpv::resolve_file_path(argument))
+        .filter(|arg| arg.as_str() != "--" && !arg.starts_with("--loadfile="))
+        .map(|arg| mpv::resolve_file_path(arg))
         .collect();
 
     let mutex = pipe::acquire_mutex();

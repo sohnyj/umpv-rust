@@ -12,13 +12,13 @@ fn is_url(string: &str) -> bool {
     string.contains("://")
 }
 
-pub fn resolve_file_path(argument: &str) -> String {
-    if is_url(argument) {
-        return argument.to_string();
+pub fn resolve_file_path(arg: &str) -> String {
+    if is_url(arg) {
+        return arg.to_string();
     }
-    match std::path::absolute(argument) {
+    match std::path::absolute(arg) {
         Ok(path) => path.to_string_lossy().into_owned(),
-        Err(_) => argument.to_string(),
+        Err(_) => arg.to_string(),
     }
 }
 
@@ -33,12 +33,12 @@ pub fn launch_mpv() {
         std::process::exit(1);
     };
 
-    let status = Command::new(&mpv_path)
+    if Command::new(&mpv_path)
         .arg(format!("--input-ipc-server={}", pipe::PIPE_PATH))
         .creation_flags(CREATE_NEW_PROCESS_GROUP)
-        .spawn();
-
-    if status.is_err() {
+        .spawn()
+        .is_err()
+    {
         std::process::exit(1);
     }
 }

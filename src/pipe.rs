@@ -86,12 +86,12 @@ pub fn send_file_commands(handle: HANDLE, files: &[String], loadfile: &str) -> R
     for file in files {
         buffer.clear();
         buffer.push_str("raw loadfile \"");
-        for character in file.chars() {
-            match character {
+        for ch in file.chars() {
+            match ch {
                 '\\' => buffer.push_str("\\\\"),
                 '"' => buffer.push_str("\\\""),
                 '\n' => buffer.push_str("\\n"),
-                _ => buffer.push(character),
+                _ => buffer.push(ch),
             }
         }
         buffer.push_str("\" ");

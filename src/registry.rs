@@ -63,7 +63,7 @@ fn set_value(key: HKEY, sub_key: &str, name: Option<&str>, data: &str) -> bool {
 fn write_value(opened_key: HKEY, name: Option<&str>, data: &str) -> bool {
     let data_wide = encode_wide_string(data);
     let name_wide;
-    let name_pointer = match name {
+    let name_ptr = match name {
         Some(name_string) => {
             name_wide = encode_wide_string(name_string);
             name_wide.as_ptr()
@@ -73,7 +73,7 @@ fn write_value(opened_key: HKEY, name: Option<&str>, data: &str) -> bool {
     unsafe {
         RegSetValueExW(
             opened_key,
-            name_pointer,
+            name_ptr,
             0,
             REG_SZ,
             data_wide.as_ptr() as *const u8,
@@ -139,14 +139,14 @@ fn enum_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> {
     results
 }
 
-fn set_assocs(extensions: impl IntoIterator<Item = impl AsRef<str>>, prog_id: &str) -> usize {
+fn set_assocs(exts: impl IntoIterator<Item = impl AsRef<str>>, prog_id: &str) -> usize {
     let Some(opened_key) = create_or_open_key(HKEY_CURRENT_USER, KEY_CAPABILITIES_FILE_ASSOCIATIONS)
     else {
         return 0;
     };
     let mut count = 0;
-    for extension in extensions {
-        if write_value(opened_key, Some(extension.as_ref()), prog_id) {
+    for ext in exts {
+        if write_value(opened_key, Some(ext.as_ref()), prog_id) {
             count += 1;
         }
     }
