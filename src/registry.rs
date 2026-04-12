@@ -23,7 +23,7 @@ fn show_message_box(text: &str) {
     }
 }
 
-fn get_executable_path() -> String {
+fn get_exe_path() -> String {
     std::env::current_exe()
         .map(|path| path.to_string_lossy().into_owned())
         .unwrap_or_else(|_| "umpv.exe".to_string())
@@ -51,17 +51,17 @@ fn create_or_open_key(key: HKEY, sub_key: &str) -> Option<HKEY> {
     }
 }
 
-fn set_registry_value(key: HKEY, sub_key: &str, name: Option<&str>, value: &str) -> bool {
+fn set_registry_value(key: HKEY, sub_key: &str, name: Option<&str>, data: &str) -> bool {
     let Some(opened_key) = create_or_open_key(key, sub_key) else {
         return false;
     };
-    let success = write_value(opened_key, name, value);
+    let success = write_value(opened_key, name, data);
     unsafe { RegCloseKey(opened_key) };
     success
 }
 
-fn write_value(opened_key: HKEY, name: Option<&str>, value: &str) -> bool {
-    let value_wide = encode_wide_string(value);
+fn write_value(opened_key: HKEY, name: Option<&str>, data: &str) -> bool {
+    let data_wide = encode_wide_string(data);
     let name_wide;
     let name_pointer = match name {
         Some(name_string) => {
@@ -76,13 +76,13 @@ fn write_value(opened_key: HKEY, name: Option<&str>, value: &str) -> bool {
             name_pointer,
             0,
             REG_SZ,
-            value_wide.as_ptr() as *const u8,
-            (value_wide.len() * std::mem::size_of::<u16>()) as u32,
+            data_wide.as_ptr() as *const u8,
+            (data_wide.len() * std::mem::size_of::<u16>()) as u32,
         ) == 0
     }
 }
 
-fn enumerate_registry_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> {
+fn enum_registry_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> {
     const ERROR_NO_MORE_ITEMS: u32 = 259;
     const ERROR_MORE_DATA: u32 = 234;
 
@@ -139,7 +139,7 @@ fn enumerate_registry_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> 
     results
 }
 
-fn set_associations(extensions: impl IntoIterator<Item = impl AsRef<str>>, prog_id: &str) -> usize {
+fn set_assocs(extensions: impl IntoIterator<Item = impl AsRef<str>>, prog_id: &str) -> usize {
     let Some(opened_key) = create_or_open_key(HKEY_CURRENT_USER, KEY_CAPABILITIES_FILE_ASSOCIATIONS)
     else {
         return 0;
@@ -172,13 +172,13 @@ fn notify_shell_change() {
 
 pub fn register(loadfile: Option<&str>) {
     let associations =
-        enumerate_registry_values(HKEY_CURRENT_USER, KEY_CAPABILITIES_FILE_ASSOCIATIONS);
+        enum_registry_values(HKEY_CURRENT_USER, KEY_CAPABILITIES_FILE_ASSOCIATIONS);
     if associations.is_empty() {
         show_message_box("No mpv file associations found.\nRun 'mpv.exe --register' first.");
         std::process::exit(1);
     }
 
-    let umpv_path = get_executable_path();
+    let umpv_path = get_exe_path();
     let loadfile = loadfile.unwrap_or(DEFAULT_LOADFILE);
 
     if !matches!(
@@ -207,7 +207,7 @@ pub fn register(loadfile: Option<&str>) {
     set_registry_value(HKEY_CURRENT_USER, KEY_UMPV_PROG_ID, None, "");
     set_registry_value(HKEY_CURRENT_USER, &command_key, None, &command);
 
-    let count = set_associations(associations.iter().map(|(ext, _)| ext), UMPV_PROG_ID);
+    let count = set_assocs(associations.iter().map(|(ext, _)| ext), UMPV_PROG_ID);
 
     notify_shell_change();
     show_message_box(&format!(
@@ -218,11 +218,11 @@ pub fn register(loadfile: Option<&str>) {
 
 pub fn unregister() {
     let associations =
-        enumerate_registry_values(HKEY_CURRENT_USER, KEY_CAPABILITIES_FILE_ASSOCIATIONS);
+        enum_registry_values(HKEY_CURRENT_USER, KEY_CAPABILITIES_FILE_ASSOCIATIONS);
 
     let umpv_associations: Vec<_> = associations
         .iter()
-        .filter(|(_, value)| value == UMPV_PROG_ID)
+        .filter(|(_, data)| data == UMPV_PROG_ID)
         .collect();
 
     if umpv_associations.is_empty() {
@@ -230,7 +230,7 @@ pub fn unregister() {
         return;
     }
 
-    let count = set_associations(umpv_associations.iter().map(|(ext, _)| ext), MPV_PROG_ID);
+    let count = set_assocs(umpv_associations.iter().map(|(ext, _)| ext), MPV_PROG_ID);
 
     delete_registry_tree(HKEY_CURRENT_USER, KEY_UMPV_PROG_ID);
 
