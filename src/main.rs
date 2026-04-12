@@ -58,7 +58,7 @@ fn main() {
         .map(|argument| mpv::resolve_file_path(argument))
         .collect();
 
-    let mutex = pipe::acquire_global_mutex();
+    let mutex = pipe::acquire_mutex();
 
     let mut existing = false;
     let result = match pipe::open_pipe() {
@@ -74,12 +74,12 @@ fn main() {
             }
         }
         Err(_) => {
-            pipe::release_global_mutex(mutex);
+            pipe::release_mutex(mutex);
             process::exit(1);
         }
     };
 
-    pipe::release_global_mutex(mutex);
+    pipe::release_mutex(mutex);
 
     if result.is_err() {
         process::exit(1);

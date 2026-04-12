@@ -14,10 +14,11 @@ use windows_sys::Win32::System::Threading::{
 use crate::encode_wide_string;
 
 pub const PIPE_PATH: &str = r"\\.\pipe\umpv";
-const MUTEX_NAME: &str = "umpv_mutex";
-const RETRY_INTERVAL_MS: u64 = 100;
+const PIPE_BUSY_TIMEOUT_MS: u32 = 5000;
 const RETRY_MAX_ATTEMPTS: u32 = 50;
-const MUTEX_WAIT_TIMEOUT_MS: u32 = 10_000;
+const RETRY_INTERVAL_MS: u64 = 100;
+const MUTEX_NAME: &str = "umpv_mutex";
+const MUTEX_TIMEOUT_MS: u32 = 10_000;
 
 fn open_pipe_handle(pipe_path_wide: &[u16]) -> HANDLE {
     unsafe {
@@ -42,7 +43,6 @@ pub fn open_pipe() -> Result<HANDLE, u32> {
 
     let error = unsafe { GetLastError() };
     if error == ERROR_PIPE_BUSY {
-        const PIPE_BUSY_TIMEOUT_MS: u32 = 5000;
         if unsafe { WaitNamedPipeW(pipe_path_wide.as_ptr(), PIPE_BUSY_TIMEOUT_MS) } != 0 {
             let handle = open_pipe_handle(&pipe_path_wide);
             if handle != INVALID_HANDLE_VALUE {
@@ -106,14 +106,14 @@ pub fn send_file_commands(handle: HANDLE, files: &[String], loadfile: &str) -> R
     Ok(())
 }
 
-pub fn acquire_global_mutex() -> HANDLE {
+pub fn acquire_mutex() -> HANDLE {
     let mutex_name_wide = encode_wide_string(MUTEX_NAME);
     unsafe {
         let handle = CreateMutexW(std::ptr::null(), 0, mutex_name_wide.as_ptr());
         if handle.is_null() {
             std::process::exit(1);
         }
-        let wait_result = WaitForSingleObject(handle, MUTEX_WAIT_TIMEOUT_MS);
+        let wait_result = WaitForSingleObject(handle, MUTEX_TIMEOUT_MS);
         if wait_result != WAIT_OBJECT_0 && wait_result != WAIT_ABANDONED {
             CloseHandle(handle);
             std::process::exit(1);
@@ -122,7 +122,7 @@ pub fn acquire_global_mutex() -> HANDLE {
     }
 }
 
-pub fn release_global_mutex(handle: HANDLE) {
+pub fn release_mutex(handle: HANDLE) {
     unsafe {
         ReleaseMutex(handle);
         CloseHandle(handle);
