@@ -2,6 +2,10 @@
 
 A single-instance mpv launcher for Windows, written in Rust. Based on the [umpv](https://github.com/mpv-player/mpv/blob/master/TOOLS/umpv) Python script from the mpv project. Opens files in a running mpv window via named pipe IPC, or launches a new instance if none is running.
 
+## Minimum Requirements
+
+- OS: Windows 10+ (x64)
+
 ## Usage
 
 **Place umpv.exe in the same directory as mpv.exe**
