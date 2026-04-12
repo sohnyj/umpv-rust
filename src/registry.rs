@@ -51,7 +51,7 @@ fn create_or_open_key(key: HKEY, sub_key: &str) -> Option<HKEY> {
     }
 }
 
-fn set_registry_value(key: HKEY, sub_key: &str, name: Option<&str>, data: &str) -> bool {
+fn set_value(key: HKEY, sub_key: &str, name: Option<&str>, data: &str) -> bool {
     let Some(opened_key) = create_or_open_key(key, sub_key) else {
         return false;
     };
@@ -82,7 +82,7 @@ fn write_value(opened_key: HKEY, name: Option<&str>, data: &str) -> bool {
     }
 }
 
-fn enum_registry_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> {
+fn enum_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> {
     const ERROR_NO_MORE_ITEMS: u32 = 259;
     const ERROR_MORE_DATA: u32 = 234;
 
@@ -154,7 +154,7 @@ fn set_assocs(extensions: impl IntoIterator<Item = impl AsRef<str>>, prog_id: &s
     count
 }
 
-fn delete_registry_tree(key: HKEY, sub_key: &str) {
+fn delete_tree(key: HKEY, sub_key: &str) {
     let sub_key_wide = encode_wide_string(sub_key);
     unsafe { RegDeleteTreeW(key, sub_key_wide.as_ptr()) };
 }
@@ -171,9 +171,9 @@ fn notify_shell_change() {
 }
 
 pub fn register(loadfile: Option<&str>) {
-    let associations =
-        enum_registry_values(HKEY_CURRENT_USER, KEY_CAPABILITIES_FILE_ASSOCIATIONS);
-    if associations.is_empty() {
+    let assocs =
+        enum_values(HKEY_CURRENT_USER, KEY_CAPABILITIES_FILE_ASSOCIATIONS);
+    if assocs.is_empty() {
         show_message_box("No mpv file associations found.\nRun 'mpv.exe --register' first.");
         std::process::exit(1);
     }
@@ -204,10 +204,10 @@ pub fn register(loadfile: Option<&str>) {
     }
     let command = format!("\"{}\" --loadfile={} -- \"%L\"", umpv_path, loadfile);
     let command_key = format!("{}\\shell\\open\\command", KEY_UMPV_PROG_ID);
-    set_registry_value(HKEY_CURRENT_USER, KEY_UMPV_PROG_ID, None, "");
-    set_registry_value(HKEY_CURRENT_USER, &command_key, None, &command);
+    set_value(HKEY_CURRENT_USER, KEY_UMPV_PROG_ID, None, "");
+    set_value(HKEY_CURRENT_USER, &command_key, None, &command);
 
-    let count = set_assocs(associations.iter().map(|(ext, _)| ext), UMPV_PROG_ID);
+    let count = set_assocs(assocs.iter().map(|(ext, _)| ext), UMPV_PROG_ID);
 
     notify_shell_change();
     show_message_box(&format!(
@@ -217,22 +217,22 @@ pub fn register(loadfile: Option<&str>) {
 }
 
 pub fn unregister() {
-    let associations =
-        enum_registry_values(HKEY_CURRENT_USER, KEY_CAPABILITIES_FILE_ASSOCIATIONS);
+    let assocs =
+        enum_values(HKEY_CURRENT_USER, KEY_CAPABILITIES_FILE_ASSOCIATIONS);
 
-    let umpv_associations: Vec<_> = associations
+    let umpv_assocs: Vec<_> = assocs
         .iter()
         .filter(|(_, data)| data == UMPV_PROG_ID)
         .collect();
 
-    if umpv_associations.is_empty() {
+    if umpv_assocs.is_empty() {
         show_message_box("Nothing to unregister.");
         return;
     }
 
-    let count = set_assocs(umpv_associations.iter().map(|(ext, _)| ext), MPV_PROG_ID);
+    let count = set_assocs(umpv_assocs.iter().map(|(ext, _)| ext), MPV_PROG_ID);
 
-    delete_registry_tree(HKEY_CURRENT_USER, KEY_UMPV_PROG_ID);
+    delete_tree(HKEY_CURRENT_USER, KEY_UMPV_PROG_ID);
 
     notify_shell_change();
     show_message_box(&format!(
