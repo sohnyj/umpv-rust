@@ -19,7 +19,7 @@ A single-instance mpv launcher for Windows, written in Rust. Based on the [umpv]
 Specify the extensions you want. Leave a category empty (`=`) to skip it.
 
 > [!NOTE]
-> Running the register command with administrator privileges is not recommended.
+> **Running the register command with Administrator privileges is not recommended,** as umpv does not support system-wide associations.
 
 ### 2. Add umpv to mpv's registered extensions
 
@@ -30,7 +30,7 @@ Only processes extensions that were registered by the mpv-register helper (step 
 ```
 
 > [!NOTE]
-> umpv only supports per-user file associations (`HKEY_CURRENT_USER`). System-wide associations are not supported.
+> umpv only supports per-user file associations (`HKEY_CURRENT_USER`). **Running as administrator is neither required nor supported, and umpv does not support system-wide associations.**
 > To set umpv as the default for each extension, go to Windows Settings > App > Default apps > mpv, and select umpv for the desired extensions.
 
 Without arguments, registers with the default loadfile mode (`replace`). Optionally specify a different mode:
