@@ -84,7 +84,6 @@ fn write_pipe(handle: HANDLE, data: &[u8]) -> bool {
 pub fn send_file_commands(handle: HANDLE, files: &[String], loadfile: &str) -> Result<(), ()> {
     let mut buffer = String::new();
     for file in files {
-        buffer.clear();
         buffer.push_str("raw loadfile \"");
         for ch in file.chars() {
             match ch {
@@ -97,13 +96,10 @@ pub fn send_file_commands(handle: HANDLE, files: &[String], loadfile: &str) -> R
         buffer.push_str("\" ");
         buffer.push_str(loadfile);
         buffer.push('\n');
-        if !write_pipe(handle, buffer.as_bytes()) {
-            unsafe { CloseHandle(handle) };
-            return Err(());
-        }
     }
+    let ok = write_pipe(handle, buffer.as_bytes());
     unsafe { CloseHandle(handle) };
-    Ok(())
+    if ok { Ok(()) } else { Err(()) }
 }
 
 pub fn acquire_mutex() -> HANDLE {

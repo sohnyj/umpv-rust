@@ -3,7 +3,9 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use windows_sys::Win32::System::Threading::CREATE_NEW_PROCESS_GROUP;
-use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, SetForegroundWindow};
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    FindWindowW, IsIconic, SetForegroundWindow, ShowWindow, SW_RESTORE,
+};
 
 use crate::pipe;
 use crate::encode_wide_string;
@@ -48,6 +50,9 @@ pub fn activate_mpv_window() {
     unsafe {
         let hwnd = FindWindowW(class_name.as_ptr(), std::ptr::null());
         if !hwnd.is_null() {
+            if IsIconic(hwnd) != 0 {
+                ShowWindow(hwnd, SW_RESTORE);
+            }
             SetForegroundWindow(hwnd);
         }
     }

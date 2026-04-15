@@ -1,3 +1,4 @@
+use windows_sys::Win32::Foundation::{ERROR_MORE_DATA, ERROR_NO_MORE_ITEMS};
 use windows_sys::Win32::System::Registry::*;
 use windows_sys::Win32::UI::Shell::{SHChangeNotify, SHCNE_ASSOCCHANGED, SHCNF_IDLIST};
 use windows_sys::Win32::UI::WindowsAndMessaging::MessageBoxW;
@@ -83,9 +84,6 @@ fn set_value(key: HKEY, sub_key: &str, name: Option<&str>, data: &str) -> bool {
 }
 
 fn enum_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> {
-    const ERROR_NO_MORE_ITEMS: u32 = 259;
-    const ERROR_MORE_DATA: u32 = 234;
-
     let sub_key_wide = encode_wide_string(sub_key);
     let mut results = Vec::new();
     unsafe {
