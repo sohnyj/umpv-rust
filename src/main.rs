@@ -67,7 +67,10 @@ fn main() {
             pipe::send_file_commands(handle, &files, loadfile)
         }
         Err(ERROR_FILE_NOT_FOUND) => {
-            mpv::launch_mpv();
+            if mpv::launch_mpv().is_err() {
+                pipe::release_mutex(mutex);
+                process::exit(1);
+            }
             match pipe::open_pipe_retry() {
                 Ok(handle) => pipe::send_file_commands(handle, &files, loadfile),
                 Err(_) => Err(()),

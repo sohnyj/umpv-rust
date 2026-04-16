@@ -30,19 +30,14 @@ fn resolve_mpv_path() -> Option<PathBuf> {
         .and_then(|exe| exe.parent().map(|dir| dir.join("mpv.exe")))
 }
 
-pub fn launch_mpv() {
-    let Some(mpv_path) = resolve_mpv_path() else {
-        std::process::exit(1);
-    };
-
-    if Command::new(&mpv_path)
+pub fn launch_mpv() -> Result<(), ()> {
+    let mpv_path = resolve_mpv_path().ok_or(())?;
+    Command::new(&mpv_path)
         .arg(format!("--input-ipc-server={}", pipe::PIPE_PATH))
         .creation_flags(CREATE_NEW_PROCESS_GROUP)
         .spawn()
-        .is_err()
-    {
-        std::process::exit(1);
-    }
+        .map_err(|_| ())?;
+    Ok(())
 }
 
 pub fn activate_mpv_window() {

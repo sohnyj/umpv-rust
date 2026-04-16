@@ -1,4 +1,4 @@
-use windows_sys::Win32::Foundation::{ERROR_MORE_DATA, ERROR_NO_MORE_ITEMS};
+use windows_sys::Win32::Foundation::ERROR_NO_MORE_ITEMS;
 use windows_sys::Win32::System::Registry::*;
 use windows_sys::Win32::UI::Shell::{SHChangeNotify, SHCNE_ASSOCCHANGED, SHCNF_IDLIST};
 use windows_sys::Win32::UI::WindowsAndMessaging::MessageBoxW;
@@ -97,7 +97,7 @@ fn enum_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> {
             let mut name_buffer = [0u16; 256];
             let mut name_length: u32 = 256;
             let mut data_buffer = [0u16; 1024];
-            let mut data_length: u32 = 2048;
+            let mut data_length = std::mem::size_of_val(&data_buffer) as u32;
             let mut value_type: u32 = 0;
 
             let status = RegEnumValueW(
@@ -114,11 +114,12 @@ fn enum_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> {
             if status == ERROR_NO_MORE_ITEMS {
                 break;
             }
-            if status != 0 && status != ERROR_MORE_DATA {
-                break;
+            if status != 0 {
+                index += 1;
+                continue;
             }
 
-            if status == 0 && value_type == REG_SZ && name_length > 0 {
+            if value_type == REG_SZ && name_length > 0 {
                 let name = String::from_utf16_lossy(&name_buffer[..name_length as usize]);
                 if name.starts_with('.') && name.len() > 1 {
                     let data_char_count = data_length as usize / std::mem::size_of::<u16>();
