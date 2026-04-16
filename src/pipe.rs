@@ -13,12 +13,36 @@ use windows_sys::Win32::System::Threading::{
 
 use crate::encode_wide;
 
+const MUTEX_NAME: &str = "umpv_mutex";
+const MUTEX_TIMEOUT_MS: u32 = 10_000;
+
+pub fn acquire_mutex() -> HANDLE {
+    let mutex_name_wide = encode_wide(MUTEX_NAME);
+    unsafe {
+        let handle = CreateMutexW(std::ptr::null(), 0, mutex_name_wide.as_ptr());
+        if handle.is_null() {
+            std::process::exit(1);
+        }
+        let wait_result = WaitForSingleObject(handle, MUTEX_TIMEOUT_MS);
+        if wait_result != WAIT_OBJECT_0 && wait_result != WAIT_ABANDONED {
+            CloseHandle(handle);
+            std::process::exit(1);
+        }
+        handle
+    }
+}
+
+pub fn release_mutex(handle: HANDLE) {
+    unsafe {
+        ReleaseMutex(handle);
+        CloseHandle(handle);
+    }
+}
+
 pub const PIPE_PATH: &str = r"\\.\pipe\umpv";
 const PIPE_BUSY_TIMEOUT_MS: u32 = 5000;
 const RETRY_MAX_ATTEMPTS: u32 = 50;
 const RETRY_INTERVAL_MS: u64 = 100;
-const MUTEX_NAME: &str = "umpv_mutex";
-const MUTEX_TIMEOUT_MS: u32 = 10_000;
 
 fn open(pipe_path_wide: &[u16]) -> HANDLE {
     unsafe {
@@ -70,6 +94,12 @@ fn connect(retry: bool) -> Result<HANDLE, u32> {
     Err(ERROR_FILE_NOT_FOUND)
 }
 
+fn get_server_pid(handle: HANDLE) -> u32 {
+    let mut pid: u32 = 0;
+    unsafe { GetNamedPipeServerProcessId(handle, &mut pid) };
+    pid
+}
+
 fn write_bytes(handle: HANDLE, data: &[u8]) -> bool {
     unsafe {
         let mut bytes_written: u32 = 0;
@@ -81,12 +111,6 @@ fn write_bytes(handle: HANDLE, data: &[u8]) -> bool {
             std::ptr::null_mut(),
         ) != 0
     }
-}
-
-fn get_server_pid(handle: HANDLE) -> u32 {
-    let mut pid: u32 = 0;
-    unsafe { GetNamedPipeServerProcessId(handle, &mut pid) };
-    pid
 }
 
 fn write_commands(handle: HANDLE, files: &[String], loadfile: &str) -> bool {
@@ -114,27 +138,4 @@ pub fn send_files(files: &[String], loadfile: &str, retry: bool) -> Result<u32, 
     let ok = write_commands(handle, files, loadfile);
     unsafe { CloseHandle(handle) };
     if ok { Ok(pid) } else { Err(0) }
-}
-
-pub fn acquire_mutex() -> HANDLE {
-    let mutex_name_wide = encode_wide(MUTEX_NAME);
-    unsafe {
-        let handle = CreateMutexW(std::ptr::null(), 0, mutex_name_wide.as_ptr());
-        if handle.is_null() {
-            std::process::exit(1);
-        }
-        let wait_result = WaitForSingleObject(handle, MUTEX_TIMEOUT_MS);
-        if wait_result != WAIT_OBJECT_0 && wait_result != WAIT_ABANDONED {
-            CloseHandle(handle);
-            std::process::exit(1);
-        }
-        handle
-    }
-}
-
-pub fn release_mutex(handle: HANDLE) {
-    unsafe {
-        ReleaseMutex(handle);
-        CloseHandle(handle);
-    }
 }

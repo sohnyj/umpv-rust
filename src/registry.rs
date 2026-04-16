@@ -11,7 +11,7 @@ const SUBKEY_UMPV_PROG_ID: &str = r"Software\Classes\io.mpv.umpv";
 const UMPV_PROG_ID: &str = "io.mpv.umpv";
 const MPV_PROG_ID: &str = "io.mpv.file";
 
-fn show_message_box(text: &str) {
+fn show_message(text: &str) {
     let text_wide = encode_wide(text);
     let caption_wide = encode_wide("umpv");
     unsafe {
@@ -30,57 +30,15 @@ fn get_exe_path() -> String {
         .unwrap_or_else(|_| "umpv.exe".to_string())
 }
 
-fn create_or_open_key(key: HKEY, sub_key: &str) -> Option<HKEY> {
-    let sub_key_wide = encode_wide(sub_key);
+fn notify_shell_change() {
     unsafe {
-        let mut opened_key: HKEY = std::ptr::null_mut();
-        if RegCreateKeyExW(
-            key,
-            sub_key_wide.as_ptr(),
-            0,
+        SHChangeNotify(
+            SHCNE_ASSOCCHANGED as i32,
+            SHCNF_IDLIST,
             std::ptr::null(),
-            REG_OPTION_NON_VOLATILE,
-            KEY_WRITE,
             std::ptr::null(),
-            &mut opened_key,
-            std::ptr::null_mut(),
-        ) != 0
-        {
-            return None;
-        }
-        Some(opened_key)
+        );
     }
-}
-
-fn write_value(opened_key: HKEY, name: Option<&str>, data: &str) -> bool {
-    let data_wide = encode_wide(data);
-    let name_wide;
-    let name_ptr = match name {
-        Some(name_string) => {
-            name_wide = encode_wide(name_string);
-            name_wide.as_ptr()
-        }
-        None => std::ptr::null(),
-    };
-    unsafe {
-        RegSetValueExW(
-            opened_key,
-            name_ptr,
-            0,
-            REG_SZ,
-            data_wide.as_ptr() as *const u8,
-            (data_wide.len() * std::mem::size_of::<u16>()) as u32,
-        ) == 0
-    }
-}
-
-fn set_value(key: HKEY, sub_key: &str, name: Option<&str>, data: &str) -> bool {
-    let Some(opened_key) = create_or_open_key(key, sub_key) else {
-        return false;
-    };
-    let success = write_value(opened_key, name, data);
-    unsafe { RegCloseKey(opened_key) };
-    success
 }
 
 fn read_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> {
@@ -143,6 +101,59 @@ fn read_assocs(key: HKEY, sub_key: &str) -> Vec<(String, String)> {
         .collect()
 }
 
+fn create_or_open_key(key: HKEY, sub_key: &str) -> Option<HKEY> {
+    let sub_key_wide = encode_wide(sub_key);
+    unsafe {
+        let mut opened_key: HKEY = std::ptr::null_mut();
+        if RegCreateKeyExW(
+            key,
+            sub_key_wide.as_ptr(),
+            0,
+            std::ptr::null(),
+            REG_OPTION_NON_VOLATILE,
+            KEY_WRITE,
+            std::ptr::null(),
+            &mut opened_key,
+            std::ptr::null_mut(),
+        ) != 0
+        {
+            return None;
+        }
+        Some(opened_key)
+    }
+}
+
+fn write_value(opened_key: HKEY, name: Option<&str>, data: &str) -> bool {
+    let data_wide = encode_wide(data);
+    let name_wide;
+    let name_ptr = match name {
+        Some(name_string) => {
+            name_wide = encode_wide(name_string);
+            name_wide.as_ptr()
+        }
+        None => std::ptr::null(),
+    };
+    unsafe {
+        RegSetValueExW(
+            opened_key,
+            name_ptr,
+            0,
+            REG_SZ,
+            data_wide.as_ptr() as *const u8,
+            (data_wide.len() * std::mem::size_of::<u16>()) as u32,
+        ) == 0
+    }
+}
+
+fn set_value(key: HKEY, sub_key: &str, name: Option<&str>, data: &str) -> bool {
+    let Some(opened_key) = create_or_open_key(key, sub_key) else {
+        return false;
+    };
+    let success = write_value(opened_key, name, data);
+    unsafe { RegCloseKey(opened_key) };
+    success
+}
+
 fn set_assocs(exts: impl IntoIterator<Item = impl AsRef<str>>, prog_id: &str) -> usize {
     let Some(opened_key) = create_or_open_key(HKEY_CURRENT_USER, SUBKEY_FILE_ASSOCIATIONS)
     else {
@@ -163,22 +174,11 @@ fn delete_tree(key: HKEY, sub_key: &str) {
     unsafe { RegDeleteTreeW(key, sub_key_wide.as_ptr()) };
 }
 
-fn notify_shell_change() {
-    unsafe {
-        SHChangeNotify(
-            SHCNE_ASSOCCHANGED as i32,
-            SHCNF_IDLIST,
-            std::ptr::null(),
-            std::ptr::null(),
-        );
-    }
-}
-
 pub fn register(loadfile: Option<&str>) {
     let assocs =
         read_assocs(HKEY_CURRENT_USER, SUBKEY_FILE_ASSOCIATIONS);
     if assocs.is_empty() {
-        show_message_box("No mpv file associations found.\nRun 'mpv.exe --register' first.");
+        show_message("No mpv file associations found.\nRun 'mpv.exe --register' first.");
         std::process::exit(1);
     }
 
@@ -195,13 +195,13 @@ pub fn register(loadfile: Option<&str>) {
             | "insert-next+play"
             | "insert-next-play"
     ) {
-        show_message_box(&format!("Unsupported loadfile flag: {}", loadfile));
+        show_message(&format!("Unsupported loadfile flag: {}", loadfile));
         std::process::exit(1);
     }
 
     if matches!(loadfile, "append-play" | "insert-next-play") {
         let replacement = loadfile.replacen("-play", "+play", 1);
-        show_message_box(&format!(
+        show_message(&format!(
             "Warning: '{}' is deprecated since mpv 0.42.\nUse '{}' instead.",
             loadfile, replacement
         ));
@@ -214,7 +214,7 @@ pub fn register(loadfile: Option<&str>) {
     let count = set_assocs(assocs.iter().map(|(ext, _)| ext), UMPV_PROG_ID);
 
     notify_shell_change();
-    show_message_box(&format!(
+    show_message(&format!(
         "umpv registered for {} file extension(s).\nloadfile: {}",
         count, loadfile
     ));
@@ -230,7 +230,7 @@ pub fn unregister() {
         .collect();
 
     if umpv_assocs.is_empty() {
-        show_message_box("Nothing to unregister.");
+        show_message("Nothing to unregister.");
         return;
     }
 
@@ -239,7 +239,7 @@ pub fn unregister() {
     delete_tree(HKEY_CURRENT_USER, SUBKEY_UMPV_PROG_ID);
 
     notify_shell_change();
-    show_message_box(&format!(
+    show_message(&format!(
         "umpv unregistered for {} file extension(s).",
         count
     ));
