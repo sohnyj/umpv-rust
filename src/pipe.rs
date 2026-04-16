@@ -20,7 +20,7 @@ const RETRY_INTERVAL_MS: u64 = 100;
 const MUTEX_NAME: &str = "umpv_mutex";
 const MUTEX_TIMEOUT_MS: u32 = 10_000;
 
-fn open_pipe_handle(pipe_path_wide: &[u16]) -> HANDLE {
+fn open_handle(pipe_path_wide: &[u16]) -> HANDLE {
     unsafe {
         CreateFileW(
             pipe_path_wide.as_ptr(),
@@ -34,41 +34,40 @@ fn open_pipe_handle(pipe_path_wide: &[u16]) -> HANDLE {
     }
 }
 
-fn open_pipe() -> Result<HANDLE, u32> {
+fn connect(retry: bool) -> Result<HANDLE, u32> {
     let pipe_path_wide = encode_wide_string(PIPE_PATH);
-    let handle = open_pipe_handle(&pipe_path_wide);
-    if handle != INVALID_HANDLE_VALUE {
-        return Ok(handle);
-    }
+    let max_attempts = if retry { RETRY_MAX_ATTEMPTS } else { 1 };
 
-    let error = unsafe { GetLastError() };
-    if error == ERROR_PIPE_BUSY {
-        if unsafe { WaitNamedPipeW(pipe_path_wide.as_ptr(), PIPE_BUSY_TIMEOUT_MS) } != 0 {
-            let handle = open_pipe_handle(&pipe_path_wide);
-            if handle != INVALID_HANDLE_VALUE {
-                return Ok(handle);
-            }
+    for attempt in 0..max_attempts {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(RETRY_INTERVAL_MS));
         }
-        return Err(unsafe { GetLastError() });
-    }
 
-    Err(error)
-}
+        let handle = open_handle(&pipe_path_wide);
+        if handle != INVALID_HANDLE_VALUE {
+            return Ok(handle);
+        }
 
-fn open_pipe_retry() -> Result<HANDLE, u32> {
-    for _ in 0..RETRY_MAX_ATTEMPTS {
-        match open_pipe() {
-            Ok(handle) => return Ok(handle),
-            Err(ERROR_FILE_NOT_FOUND) => {
-                std::thread::sleep(std::time::Duration::from_millis(RETRY_INTERVAL_MS));
+        let error = unsafe { GetLastError() };
+        if error == ERROR_PIPE_BUSY {
+            if unsafe { WaitNamedPipeW(pipe_path_wide.as_ptr(), PIPE_BUSY_TIMEOUT_MS) } != 0 {
+                let handle = open_handle(&pipe_path_wide);
+                if handle != INVALID_HANDLE_VALUE {
+                    return Ok(handle);
+                }
             }
-            Err(error) => return Err(error),
+            return Err(unsafe { GetLastError() });
+        }
+
+        if error != ERROR_FILE_NOT_FOUND {
+            return Err(error);
         }
     }
+
     Err(ERROR_FILE_NOT_FOUND)
 }
 
-fn write_pipe(handle: HANDLE, data: &[u8]) -> bool {
+fn write(handle: HANDLE, data: &[u8]) -> bool {
     unsafe {
         let mut bytes_written: u32 = 0;
         WriteFile(
@@ -103,11 +102,11 @@ fn write_commands(handle: HANDLE, files: &[String], loadfile: &str) -> bool {
         buffer.push_str(loadfile);
         buffer.push('\n');
     }
-    write_pipe(handle, buffer.as_bytes())
+    write(handle, buffer.as_bytes())
 }
 
 pub fn send_files(files: &[String], loadfile: &str, retry: bool) -> Result<u32, u32> {
-    let handle = if retry { open_pipe_retry()? } else { open_pipe()? };
+    let handle = connect(retry)?;
     let pid = get_server_pid(handle);
     let ok = write_commands(handle, files, loadfile);
     unsafe { CloseHandle(handle) };
