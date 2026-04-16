@@ -99,7 +99,7 @@ fn connect(retry: bool) -> Result<HANDLE, u32> {
     Err(ERROR_FILE_NOT_FOUND)
 }
 
-fn get_server_pid(handle: HANDLE) -> u32 {
+fn get_mpv_pid(handle: HANDLE) -> u32 {
     let mut pid: u32 = 0;
     unsafe { GetNamedPipeServerProcessId(handle, &mut pid) };
     pid
@@ -139,7 +139,7 @@ fn write_commands(handle: HANDLE, files: &[String], loadfile_mode: &str) -> bool
 
 pub fn send_files(files: &[String], loadfile_mode: &str, retry: bool) -> Result<u32, SendError> {
     let handle = connect(retry).map_err(SendError::Connect)?;
-    let pid = get_server_pid(handle);
+    let pid = get_mpv_pid(handle);
     let ok = write_commands(handle, files, loadfile_mode);
     unsafe { CloseHandle(handle) };
     if ok { Ok(pid) } else { Err(SendError::Write) }
