@@ -174,7 +174,7 @@ fn delete_tree(key: HKEY, sub_key: &str) {
     unsafe { RegDeleteTreeW(key, sub_key_wide.as_ptr()) };
 }
 
-pub fn register(loadfile: Option<&str>) {
+pub fn register(loadfile_mode: Option<&str>) {
     let assocs =
         read_assocs(HKEY_CURRENT_USER, SUBKEY_FILE_ASSOCIATIONS);
     if assocs.is_empty() {
@@ -183,10 +183,10 @@ pub fn register(loadfile: Option<&str>) {
     }
 
     let umpv_path = get_exe_path();
-    let loadfile = loadfile.unwrap_or(DEFAULT_LOADFILE_MODE);
+    let loadfile_mode = loadfile_mode.unwrap_or(DEFAULT_LOADFILE_MODE);
 
     if !matches!(
-        loadfile,
+        loadfile_mode,
         "replace"
             | "append"
             | "append+play"
@@ -195,18 +195,18 @@ pub fn register(loadfile: Option<&str>) {
             | "insert-next+play"
             | "insert-next-play"
     ) {
-        show_message(&format!("Unsupported loadfile flag: {}", loadfile));
+        show_message(&format!("Unsupported loadfile flag: {}", loadfile_mode));
         std::process::exit(1);
     }
 
-    if matches!(loadfile, "append-play" | "insert-next-play") {
-        let replacement = loadfile.replacen("-play", "+play", 1);
+    if matches!(loadfile_mode, "append-play" | "insert-next-play") {
+        let replacement = loadfile_mode.replacen("-play", "+play", 1);
         show_message(&format!(
             "Warning: '{}' is deprecated since mpv 0.42.\nUse '{}' instead.",
-            loadfile, replacement
+            loadfile_mode, replacement
         ));
     }
-    let command = format!("\"{}\" --loadfile={} -- \"%L\"", umpv_path, loadfile);
+    let command = format!("\"{}\" --loadfile={} -- \"%L\"", umpv_path, loadfile_mode);
     let command_key = format!("{}\\shell\\open\\command", SUBKEY_UMPV_PROG_ID);
     set_value(HKEY_CURRENT_USER, SUBKEY_UMPV_PROG_ID, None, "");
     set_value(HKEY_CURRENT_USER, &command_key, None, &command);
@@ -216,7 +216,7 @@ pub fn register(loadfile: Option<&str>) {
     notify_shell_change();
     show_message(&format!(
         "umpv registered for {} file extension(s).\nloadfile: {}",
-        count, loadfile
+        count, loadfile_mode
     ));
 }
 

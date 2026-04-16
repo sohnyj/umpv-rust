@@ -6,6 +6,8 @@ use std::process;
 
 use windows_sys::Win32::Foundation::ERROR_FILE_NOT_FOUND;
 
+use pipe::SendError;
+
 mod mpv;
 mod pipe;
 mod registry;
@@ -62,7 +64,7 @@ fn main() {
 
     let (result, existing) = match pipe::send_files(&files, loadfile_mode, false) {
         ok @ Ok(_) => (ok, true),
-        Err(ERROR_FILE_NOT_FOUND) => {
+        Err(SendError::Connect(ERROR_FILE_NOT_FOUND)) => {
             if mpv::launch_mpv().is_err() {
                 pipe::release_mutex(mutex);
                 process::exit(1);

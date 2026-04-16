@@ -13,6 +13,11 @@ use windows_sys::Win32::System::Threading::{
 
 use crate::encode_wide;
 
+pub enum SendError {
+    Connect(u32),
+    Write,
+}
+
 const MUTEX_NAME: &str = "umpv_mutex";
 const MUTEX_TIMEOUT_MS: u32 = 10_000;
 
@@ -113,7 +118,7 @@ fn write_bytes(handle: HANDLE, data: &[u8]) -> bool {
     }
 }
 
-fn write_commands(handle: HANDLE, files: &[String], loadfile: &str) -> bool {
+fn write_commands(handle: HANDLE, files: &[String], loadfile_mode: &str) -> bool {
     let mut buffer = String::new();
     for file in files {
         buffer.push_str("raw loadfile \"");
@@ -126,16 +131,16 @@ fn write_commands(handle: HANDLE, files: &[String], loadfile: &str) -> bool {
             }
         }
         buffer.push_str("\" ");
-        buffer.push_str(loadfile);
+        buffer.push_str(loadfile_mode);
         buffer.push('\n');
     }
     write_bytes(handle, buffer.as_bytes())
 }
 
-pub fn send_files(files: &[String], loadfile: &str, retry: bool) -> Result<u32, u32> {
-    let handle = connect(retry)?;
+pub fn send_files(files: &[String], loadfile_mode: &str, retry: bool) -> Result<u32, SendError> {
+    let handle = connect(retry).map_err(SendError::Connect)?;
     let pid = get_server_pid(handle);
-    let ok = write_commands(handle, files, loadfile);
+    let ok = write_commands(handle, files, loadfile_mode);
     unsafe { CloseHandle(handle) };
-    if ok { Ok(pid) } else { Err(0) }
+    if ok { Ok(pid) } else { Err(SendError::Write) }
 }
