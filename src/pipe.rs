@@ -11,7 +11,7 @@ use windows_sys::Win32::System::Threading::{
     CreateMutexW, ReleaseMutex, WaitForSingleObject,
 };
 
-use crate::encode_wide_string;
+use crate::encode_wide;
 
 pub const PIPE_PATH: &str = r"\\.\pipe\umpv";
 const PIPE_BUSY_TIMEOUT_MS: u32 = 5000;
@@ -35,7 +35,7 @@ fn open_handle(pipe_path_wide: &[u16]) -> HANDLE {
 }
 
 fn connect(retry: bool) -> Result<HANDLE, u32> {
-    let pipe_path_wide = encode_wide_string(PIPE_PATH);
+    let pipe_path_wide = encode_wide(PIPE_PATH);
     let max_attempts = if retry { RETRY_MAX_ATTEMPTS } else { 1 };
 
     for attempt in 0..max_attempts {
@@ -67,7 +67,7 @@ fn connect(retry: bool) -> Result<HANDLE, u32> {
     Err(ERROR_FILE_NOT_FOUND)
 }
 
-fn write(handle: HANDLE, data: &[u8]) -> bool {
+fn write_bytes(handle: HANDLE, data: &[u8]) -> bool {
     unsafe {
         let mut bytes_written: u32 = 0;
         WriteFile(
@@ -102,7 +102,7 @@ fn write_commands(handle: HANDLE, files: &[String], loadfile: &str) -> bool {
         buffer.push_str(loadfile);
         buffer.push('\n');
     }
-    write(handle, buffer.as_bytes())
+    write_bytes(handle, buffer.as_bytes())
 }
 
 pub fn send_files(files: &[String], loadfile: &str, retry: bool) -> Result<u32, u32> {
@@ -114,7 +114,7 @@ pub fn send_files(files: &[String], loadfile: &str, retry: bool) -> Result<u32, 
 }
 
 pub fn acquire_mutex() -> HANDLE {
-    let mutex_name_wide = encode_wide_string(MUTEX_NAME);
+    let mutex_name_wide = encode_wide(MUTEX_NAME);
     unsafe {
         let handle = CreateMutexW(std::ptr::null(), 0, mutex_name_wide.as_ptr());
         if handle.is_null() {

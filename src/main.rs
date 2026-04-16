@@ -10,16 +10,16 @@ mod mpv;
 mod pipe;
 mod registry;
 
-pub const DEFAULT_LOADFILE: &str = "replace";
+pub const DEFAULT_LOADFILE_MODE: &str = "replace";
 
-pub fn encode_wide_string(string: &str) -> Vec<u16> {
+pub fn encode_wide(string: &str) -> Vec<u16> {
     std::ffi::OsStr::new(string)
         .encode_wide()
         .chain(std::iter::once(0))
         .collect()
 }
 
-fn parse_loadfile_arg(args: &[String]) -> Option<&str> {
+fn parse_loadfile_mode(args: &[String]) -> Option<&str> {
     args
         .iter()
         .find_map(|arg| arg.strip_prefix("--loadfile="))
@@ -36,7 +36,7 @@ fn main() {
 
     match args.first().map(String::as_str) {
         Some("--register") => {
-            registry::register(parse_loadfile_arg(&args));
+            registry::register(parse_loadfile_mode(&args));
             return;
         }
         Some("--unregister") => {
@@ -50,7 +50,7 @@ fn main() {
         return;
     }
 
-    let loadfile = parse_loadfile_arg(&args).unwrap_or(DEFAULT_LOADFILE);
+    let loadfile_mode = parse_loadfile_mode(&args).unwrap_or(DEFAULT_LOADFILE_MODE);
 
     let files: Vec<String> = args
         .iter()
@@ -60,14 +60,14 @@ fn main() {
 
     let mutex = pipe::acquire_mutex();
 
-    let (result, existing) = match pipe::send_files(&files, loadfile, false) {
+    let (result, existing) = match pipe::send_files(&files, loadfile_mode, false) {
         ok @ Ok(_) => (ok, true),
         Err(ERROR_FILE_NOT_FOUND) => {
             if mpv::launch_mpv().is_err() {
                 pipe::release_mutex(mutex);
                 process::exit(1);
             }
-            (pipe::send_files(&files, loadfile, true), false)
+            (pipe::send_files(&files, loadfile_mode, true), false)
         }
         Err(_) => {
             pipe::release_mutex(mutex);

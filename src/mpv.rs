@@ -42,16 +42,16 @@ pub fn launch_mpv() -> Result<(), ()> {
     Ok(())
 }
 
-unsafe extern "system" fn enum_window_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
+unsafe extern "system" fn find_mpv_window(hwnd: HWND, lparam: LPARAM) -> BOOL {
     let target_pid = lparam as u32;
     let mut pid: u32 = 0;
     unsafe { GetWindowThreadProcessId(hwnd, &mut pid) };
     if pid != target_pid {
         return 1;
     }
-    let mut class_name = [0u16; 16];
-    let len = unsafe { GetClassNameW(hwnd, class_name.as_mut_ptr(), 16) };
-    if len == 3 && class_name[..3] == [b'm' as u16, b'p' as u16, b'v' as u16] {
+    let mut class_buf = [0u16; 16];
+    let len = unsafe { GetClassNameW(hwnd, class_buf.as_mut_ptr(), 16) };
+    if len == 3 && class_buf[..3] == [b'm' as u16, b'p' as u16, b'v' as u16] {
         if unsafe { IsIconic(hwnd) } != 0 {
             unsafe { ShowWindow(hwnd, SW_RESTORE) };
         }
@@ -62,5 +62,5 @@ unsafe extern "system" fn enum_window_callback(hwnd: HWND, lparam: LPARAM) -> BO
 }
 
 pub fn activate_mpv_window(pid: u32) {
-    unsafe { EnumWindows(Some(enum_window_callback), pid as LPARAM) };
+    unsafe { EnumWindows(Some(find_mpv_window), pid as LPARAM) };
 }

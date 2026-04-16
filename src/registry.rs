@@ -3,17 +3,17 @@ use windows_sys::Win32::System::Registry::*;
 use windows_sys::Win32::UI::Shell::{SHChangeNotify, SHCNE_ASSOCCHANGED, SHCNF_IDLIST};
 use windows_sys::Win32::UI::WindowsAndMessaging::MessageBoxW;
 
-use crate::{encode_wide_string, DEFAULT_LOADFILE};
+use crate::{encode_wide, DEFAULT_LOADFILE_MODE};
 
-const KEY_CAPABILITIES_FILE_ASSOCIATIONS: &str =
+const SUBKEY_FILE_ASSOCIATIONS: &str =
     r"Software\Clients\Media\mpv\Capabilities\FileAssociations";
-const KEY_UMPV_PROG_ID: &str = r"Software\Classes\io.mpv.umpv";
+const SUBKEY_UMPV_PROG_ID: &str = r"Software\Classes\io.mpv.umpv";
 const UMPV_PROG_ID: &str = "io.mpv.umpv";
 const MPV_PROG_ID: &str = "io.mpv.file";
 
 fn show_message_box(text: &str) {
-    let text_wide = encode_wide_string(text);
-    let caption_wide = encode_wide_string("umpv");
+    let text_wide = encode_wide(text);
+    let caption_wide = encode_wide("umpv");
     unsafe {
         MessageBoxW(
             std::ptr::null_mut(),
@@ -31,7 +31,7 @@ fn get_exe_path() -> String {
 }
 
 fn create_or_open_key(key: HKEY, sub_key: &str) -> Option<HKEY> {
-    let sub_key_wide = encode_wide_string(sub_key);
+    let sub_key_wide = encode_wide(sub_key);
     unsafe {
         let mut opened_key: HKEY = std::ptr::null_mut();
         if RegCreateKeyExW(
@@ -53,11 +53,11 @@ fn create_or_open_key(key: HKEY, sub_key: &str) -> Option<HKEY> {
 }
 
 fn write_value(opened_key: HKEY, name: Option<&str>, data: &str) -> bool {
-    let data_wide = encode_wide_string(data);
+    let data_wide = encode_wide(data);
     let name_wide;
     let name_ptr = match name {
         Some(name_string) => {
-            name_wide = encode_wide_string(name_string);
+            name_wide = encode_wide(name_string);
             name_wide.as_ptr()
         }
         None => std::ptr::null(),
@@ -83,8 +83,8 @@ fn set_value(key: HKEY, sub_key: &str, name: Option<&str>, data: &str) -> bool {
     success
 }
 
-fn enum_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> {
-    let sub_key_wide = encode_wide_string(sub_key);
+fn read_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> {
+    let sub_key_wide = encode_wide(sub_key);
     let mut results = Vec::new();
     unsafe {
         let mut opened_key: HKEY = std::ptr::null_mut();
@@ -121,15 +121,13 @@ fn enum_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> {
 
             if value_type == REG_SZ && name_length > 0 {
                 let name = String::from_utf16_lossy(&name_buffer[..name_length as usize]);
-                if name.starts_with('.') && name.len() > 1 {
-                    let data_char_count = data_length as usize / std::mem::size_of::<u16>();
-                    let data = if data_char_count > 0 && data_buffer[data_char_count - 1] == 0 {
-                        String::from_utf16_lossy(&data_buffer[..data_char_count - 1])
-                    } else {
-                        String::from_utf16_lossy(&data_buffer[..data_char_count])
-                    };
-                    results.push((name, data));
-                }
+                let data_char_count = data_length as usize / std::mem::size_of::<u16>();
+                let data = if data_char_count > 0 && data_buffer[data_char_count - 1] == 0 {
+                    String::from_utf16_lossy(&data_buffer[..data_char_count - 1])
+                } else {
+                    String::from_utf16_lossy(&data_buffer[..data_char_count])
+                };
+                results.push((name, data));
             }
             index += 1;
         }
@@ -138,8 +136,15 @@ fn enum_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> {
     results
 }
 
+fn read_assocs(key: HKEY, sub_key: &str) -> Vec<(String, String)> {
+    read_values(key, sub_key)
+        .into_iter()
+        .filter(|(name, _)| name.starts_with('.') && name.len() > 1)
+        .collect()
+}
+
 fn set_assocs(exts: impl IntoIterator<Item = impl AsRef<str>>, prog_id: &str) -> usize {
-    let Some(opened_key) = create_or_open_key(HKEY_CURRENT_USER, KEY_CAPABILITIES_FILE_ASSOCIATIONS)
+    let Some(opened_key) = create_or_open_key(HKEY_CURRENT_USER, SUBKEY_FILE_ASSOCIATIONS)
     else {
         return 0;
     };
@@ -154,7 +159,7 @@ fn set_assocs(exts: impl IntoIterator<Item = impl AsRef<str>>, prog_id: &str) ->
 }
 
 fn delete_tree(key: HKEY, sub_key: &str) {
-    let sub_key_wide = encode_wide_string(sub_key);
+    let sub_key_wide = encode_wide(sub_key);
     unsafe { RegDeleteTreeW(key, sub_key_wide.as_ptr()) };
 }
 
@@ -171,14 +176,14 @@ fn notify_shell_change() {
 
 pub fn register(loadfile: Option<&str>) {
     let assocs =
-        enum_values(HKEY_CURRENT_USER, KEY_CAPABILITIES_FILE_ASSOCIATIONS);
+        read_assocs(HKEY_CURRENT_USER, SUBKEY_FILE_ASSOCIATIONS);
     if assocs.is_empty() {
         show_message_box("No mpv file associations found.\nRun 'mpv.exe --register' first.");
         std::process::exit(1);
     }
 
     let umpv_path = get_exe_path();
-    let loadfile = loadfile.unwrap_or(DEFAULT_LOADFILE);
+    let loadfile = loadfile.unwrap_or(DEFAULT_LOADFILE_MODE);
 
     if !matches!(
         loadfile,
@@ -202,8 +207,8 @@ pub fn register(loadfile: Option<&str>) {
         ));
     }
     let command = format!("\"{}\" --loadfile={} -- \"%L\"", umpv_path, loadfile);
-    let command_key = format!("{}\\shell\\open\\command", KEY_UMPV_PROG_ID);
-    set_value(HKEY_CURRENT_USER, KEY_UMPV_PROG_ID, None, "");
+    let command_key = format!("{}\\shell\\open\\command", SUBKEY_UMPV_PROG_ID);
+    set_value(HKEY_CURRENT_USER, SUBKEY_UMPV_PROG_ID, None, "");
     set_value(HKEY_CURRENT_USER, &command_key, None, &command);
 
     let count = set_assocs(assocs.iter().map(|(ext, _)| ext), UMPV_PROG_ID);
@@ -217,7 +222,7 @@ pub fn register(loadfile: Option<&str>) {
 
 pub fn unregister() {
     let assocs =
-        enum_values(HKEY_CURRENT_USER, KEY_CAPABILITIES_FILE_ASSOCIATIONS);
+        read_assocs(HKEY_CURRENT_USER, SUBKEY_FILE_ASSOCIATIONS);
 
     let umpv_assocs: Vec<_> = assocs
         .iter()
@@ -231,7 +236,7 @@ pub fn unregister() {
 
     let count = set_assocs(umpv_assocs.iter().map(|(ext, _)| ext), MPV_PROG_ID);
 
-    delete_tree(HKEY_CURRENT_USER, KEY_UMPV_PROG_ID);
+    delete_tree(HKEY_CURRENT_USER, SUBKEY_UMPV_PROG_ID);
 
     notify_shell_change();
     show_message_box(&format!(
