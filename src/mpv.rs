@@ -2,13 +2,15 @@ use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::process::Command;
 
+use windows_sys::core::BOOL;
+use windows_sys::Win32::Foundation::{HWND, LPARAM};
 use windows_sys::Win32::System::Threading::CREATE_NEW_PROCESS_GROUP;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    FindWindowW, IsIconic, SetForegroundWindow, ShowWindow, SW_RESTORE,
+    EnumWindows, GetClassNameW, GetWindowThreadProcessId, IsIconic, SetForegroundWindow, ShowWindow,
+    SW_RESTORE,
 };
 
 use crate::pipe;
-use crate::encode_wide_string;
 
 fn is_url(string: &str) -> bool {
     string.contains("://")
@@ -40,15 +42,25 @@ pub fn launch_mpv() -> Result<(), ()> {
     Ok(())
 }
 
-pub fn activate_mpv_window() {
-    let class_name = encode_wide_string("mpv");
-    unsafe {
-        let hwnd = FindWindowW(class_name.as_ptr(), std::ptr::null());
-        if !hwnd.is_null() {
-            if IsIconic(hwnd) != 0 {
-                ShowWindow(hwnd, SW_RESTORE);
-            }
-            SetForegroundWindow(hwnd);
-        }
+unsafe extern "system" fn enum_window_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
+    let target_pid = lparam as u32;
+    let mut pid: u32 = 0;
+    unsafe { GetWindowThreadProcessId(hwnd, &mut pid) };
+    if pid != target_pid {
+        return 1;
     }
+    let mut class_name = [0u16; 16];
+    let len = unsafe { GetClassNameW(hwnd, class_name.as_mut_ptr(), 16) };
+    if len == 3 && class_name[..3] == [b'm' as u16, b'p' as u16, b'v' as u16] {
+        if unsafe { IsIconic(hwnd) } != 0 {
+            unsafe { ShowWindow(hwnd, SW_RESTORE) };
+        }
+        unsafe { SetForegroundWindow(hwnd) };
+        return 0;
+    }
+    1
+}
+
+pub fn activate_mpv_window(pid: u32) {
+    unsafe { EnumWindows(Some(enum_window_callback), pid as LPARAM) };
 }

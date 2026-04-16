@@ -60,21 +60,18 @@ fn main() {
 
     let mutex = pipe::acquire_mutex();
 
-    let mut existing = false;
-    let result = match pipe::open_pipe() {
-        Ok(handle) => {
-            existing = true;
-            pipe::send_file_commands(handle, &files, loadfile)
-        }
+    let (result, existing) = match pipe::open_pipe() {
+        Ok(handle) => (pipe::send_file_commands(handle, &files, loadfile), true),
         Err(ERROR_FILE_NOT_FOUND) => {
             if mpv::launch_mpv().is_err() {
                 pipe::release_mutex(mutex);
                 process::exit(1);
             }
-            match pipe::open_pipe_retry() {
+            let result = match pipe::open_pipe_retry() {
                 Ok(handle) => pipe::send_file_commands(handle, &files, loadfile),
                 Err(_) => Err(()),
-            }
+            };
+            (result, false)
         }
         Err(_) => {
             pipe::release_mutex(mutex);
@@ -84,11 +81,9 @@ fn main() {
 
     pipe::release_mutex(mutex);
 
-    if result.is_err() {
-        process::exit(1);
-    }
-
-    if existing {
-        mpv::activate_mpv_window();
+    match result {
+        Ok(pid) if existing && pid != 0 => mpv::activate_mpv_window(pid),
+        Err(_) => process::exit(1),
+        Ok(_) => {}
     }
 }

@@ -6,7 +6,7 @@ use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, WriteFile, FILE_ATTRIBUTE_NORMAL, OPEN_EXISTING, SECURITY_IDENTIFICATION,
     SECURITY_SQOS_PRESENT,
 };
-use windows_sys::Win32::System::Pipes::WaitNamedPipeW;
+use windows_sys::Win32::System::Pipes::{GetNamedPipeServerProcessId, WaitNamedPipeW};
 use windows_sys::Win32::System::Threading::{
     CreateMutexW, ReleaseMutex, WaitForSingleObject,
 };
@@ -81,7 +81,12 @@ fn write_pipe(handle: HANDLE, data: &[u8]) -> bool {
     }
 }
 
-pub fn send_file_commands(handle: HANDLE, files: &[String], loadfile: &str) -> Result<(), ()> {
+pub fn send_file_commands(handle: HANDLE, files: &[String], loadfile: &str) -> Result<u32, ()> {
+    let mut server_pid: u32 = 0;
+    if unsafe { GetNamedPipeServerProcessId(handle, &mut server_pid) } == 0 {
+        server_pid = 0;
+    }
+
     let mut buffer = String::new();
     for file in files {
         buffer.push_str("raw loadfile \"");
@@ -99,7 +104,7 @@ pub fn send_file_commands(handle: HANDLE, files: &[String], loadfile: &str) -> R
     }
     let ok = write_pipe(handle, buffer.as_bytes());
     unsafe { CloseHandle(handle) };
-    if ok { Ok(()) } else { Err(()) }
+    if ok { Ok(server_pid) } else { Err(()) }
 }
 
 pub fn acquire_mutex() -> HANDLE {
