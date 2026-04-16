@@ -60,18 +60,14 @@ fn main() {
 
     let mutex = pipe::acquire_mutex();
 
-    let (result, existing) = match pipe::open_pipe() {
-        Ok(handle) => (pipe::send_file_commands(handle, &files, loadfile), true),
+    let (result, existing) = match pipe::send_files(&files, loadfile, false) {
+        ok @ Ok(_) => (ok, true),
         Err(ERROR_FILE_NOT_FOUND) => {
             if mpv::launch_mpv().is_err() {
                 pipe::release_mutex(mutex);
                 process::exit(1);
             }
-            let result = match pipe::open_pipe_retry() {
-                Ok(handle) => pipe::send_file_commands(handle, &files, loadfile),
-                Err(_) => Err(()),
-            };
-            (result, false)
+            (pipe::send_files(&files, loadfile, true), false)
         }
         Err(_) => {
             pipe::release_mutex(mutex);

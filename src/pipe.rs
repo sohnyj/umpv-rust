@@ -34,7 +34,7 @@ fn open_pipe_handle(pipe_path_wide: &[u16]) -> HANDLE {
     }
 }
 
-pub fn open_pipe() -> Result<HANDLE, u32> {
+fn open_pipe() -> Result<HANDLE, u32> {
     let pipe_path_wide = encode_wide_string(PIPE_PATH);
     let handle = open_pipe_handle(&pipe_path_wide);
     if handle != INVALID_HANDLE_VALUE {
@@ -55,7 +55,7 @@ pub fn open_pipe() -> Result<HANDLE, u32> {
     Err(error)
 }
 
-pub fn open_pipe_retry() -> Result<HANDLE, u32> {
+fn open_pipe_retry() -> Result<HANDLE, u32> {
     for _ in 0..RETRY_MAX_ATTEMPTS {
         match open_pipe() {
             Ok(handle) => return Ok(handle),
@@ -81,12 +81,13 @@ fn write_pipe(handle: HANDLE, data: &[u8]) -> bool {
     }
 }
 
-pub fn send_file_commands(handle: HANDLE, files: &[String], loadfile: &str) -> Result<u32, ()> {
-    let mut server_pid: u32 = 0;
-    if unsafe { GetNamedPipeServerProcessId(handle, &mut server_pid) } == 0 {
-        server_pid = 0;
-    }
+fn get_server_pid(handle: HANDLE) -> u32 {
+    let mut pid: u32 = 0;
+    unsafe { GetNamedPipeServerProcessId(handle, &mut pid) };
+    pid
+}
 
+fn write_commands(handle: HANDLE, files: &[String], loadfile: &str) -> bool {
     let mut buffer = String::new();
     for file in files {
         buffer.push_str("raw loadfile \"");
@@ -102,9 +103,15 @@ pub fn send_file_commands(handle: HANDLE, files: &[String], loadfile: &str) -> R
         buffer.push_str(loadfile);
         buffer.push('\n');
     }
-    let ok = write_pipe(handle, buffer.as_bytes());
+    write_pipe(handle, buffer.as_bytes())
+}
+
+pub fn send_files(files: &[String], loadfile: &str, retry: bool) -> Result<u32, u32> {
+    let handle = if retry { open_pipe_retry()? } else { open_pipe()? };
+    let pid = get_server_pid(handle);
+    let ok = write_commands(handle, files, loadfile);
     unsafe { CloseHandle(handle) };
-    if ok { Ok(server_pid) } else { Err(()) }
+    if ok { Ok(pid) } else { Err(0) }
 }
 
 pub fn acquire_mutex() -> HANDLE {
