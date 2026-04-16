@@ -20,7 +20,7 @@ const RETRY_INTERVAL_MS: u64 = 100;
 const MUTEX_NAME: &str = "umpv_mutex";
 const MUTEX_TIMEOUT_MS: u32 = 10_000;
 
-fn open_handle(pipe_path_wide: &[u16]) -> HANDLE {
+fn open(pipe_path_wide: &[u16]) -> HANDLE {
     unsafe {
         CreateFileW(
             pipe_path_wide.as_ptr(),
@@ -43,7 +43,7 @@ fn connect(retry: bool) -> Result<HANDLE, u32> {
             std::thread::sleep(std::time::Duration::from_millis(RETRY_INTERVAL_MS));
         }
 
-        let handle = open_handle(&pipe_path_wide);
+        let handle = open(&pipe_path_wide);
         if handle != INVALID_HANDLE_VALUE {
             return Ok(handle);
         }
@@ -51,12 +51,15 @@ fn connect(retry: bool) -> Result<HANDLE, u32> {
         let error = unsafe { GetLastError() };
         if error == ERROR_PIPE_BUSY {
             if unsafe { WaitNamedPipeW(pipe_path_wide.as_ptr(), PIPE_BUSY_TIMEOUT_MS) } != 0 {
-                let handle = open_handle(&pipe_path_wide);
+                let handle = open(&pipe_path_wide);
                 if handle != INVALID_HANDLE_VALUE {
                     return Ok(handle);
                 }
             }
-            return Err(unsafe { GetLastError() });
+            if !retry {
+                return Err(unsafe { GetLastError() });
+            }
+            continue;
         }
 
         if error != ERROR_FILE_NOT_FOUND {
