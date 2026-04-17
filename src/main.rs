@@ -5,6 +5,7 @@ use std::os::windows::ffi::OsStrExt;
 use std::process;
 
 use windows_sys::Win32::Foundation::ERROR_FILE_NOT_FOUND;
+use windows_sys::Win32::UI::WindowsAndMessaging::MessageBoxW;
 
 use pipe::SendError;
 
@@ -19,6 +20,19 @@ pub fn encode_wide(string: &str) -> Vec<u16> {
         .encode_wide()
         .chain(std::iter::once(0))
         .collect()
+}
+
+pub fn show_message(text: &str) {
+    let text_wide = encode_wide(text);
+    let caption_wide = encode_wide("umpv");
+    unsafe {
+        MessageBoxW(
+            std::ptr::null_mut(),
+            text_wide.as_ptr(),
+            caption_wide.as_ptr(),
+            0,
+        );
+    }
 }
 
 fn parse_loadfile_mode(args: &[String]) -> Option<&str> {
@@ -60,24 +74,21 @@ fn main() {
         .map(|arg| mpv::resolve_file_path(arg))
         .collect();
 
-    let mutex = pipe::acquire_mutex();
+    let Ok(_mutex) = pipe::acquire_mutex() else {
+        process::exit(1);
+    };
 
     let (result, existing) = match pipe::send_files(&files, loadfile_mode, false) {
         ok @ Ok(_) => (ok, true),
         Err(SendError::Connect(ERROR_FILE_NOT_FOUND)) => {
-            if mpv::launch_mpv().is_err() {
-                pipe::release_mutex(mutex);
+            if let Err(err) = mpv::launch_mpv() {
+                show_message(&format!("Failed to launch mpv: {}", err));
                 process::exit(1);
             }
             (pipe::send_files(&files, loadfile_mode, true), false)
         }
-        Err(_) => {
-            pipe::release_mutex(mutex);
-            process::exit(1);
-        }
+        Err(_) => process::exit(1),
     };
-
-    pipe::release_mutex(mutex);
 
     match result {
         Ok(pid) if existing && pid != 0 => mpv::activate_mpv_window(pid),

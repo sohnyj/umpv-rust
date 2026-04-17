@@ -1,5 +1,5 @@
 use windows_sys::Win32::Foundation::{
-    CloseHandle, GetLastError, ERROR_FILE_NOT_FOUND, ERROR_PIPE_BUSY, GENERIC_WRITE, HANDLE,
+    CloseHandle, GetLastError, ERROR_FILE_NOT_FOUND, ERROR_PIPE_BUSY, FALSE, GENERIC_WRITE, HANDLE,
     INVALID_HANDLE_VALUE, WAIT_ABANDONED, WAIT_OBJECT_0,
 };
 use windows_sys::Win32::Storage::FileSystem::{
@@ -21,26 +21,30 @@ pub enum SendError {
 const MUTEX_NAME: &str = "umpv_mutex";
 const MUTEX_TIMEOUT_MS: u32 = 10_000;
 
-pub fn acquire_mutex() -> HANDLE {
+pub struct MutexGuard(HANDLE);
+
+impl Drop for MutexGuard {
+    fn drop(&mut self) {
+        unsafe {
+            ReleaseMutex(self.0);
+            CloseHandle(self.0);
+        }
+    }
+}
+
+pub fn acquire_mutex() -> Result<MutexGuard, ()> {
     let mutex_name_wide = encode_wide(MUTEX_NAME);
     unsafe {
         let handle = CreateMutexW(std::ptr::null(), 0, mutex_name_wide.as_ptr());
         if handle.is_null() {
-            std::process::exit(1);
+            return Err(());
         }
         let wait_result = WaitForSingleObject(handle, MUTEX_TIMEOUT_MS);
         if wait_result != WAIT_OBJECT_0 && wait_result != WAIT_ABANDONED {
             CloseHandle(handle);
-            std::process::exit(1);
+            return Err(());
         }
-        handle
-    }
-}
-
-pub fn release_mutex(handle: HANDLE) {
-    unsafe {
-        ReleaseMutex(handle);
-        CloseHandle(handle);
+        Ok(MutexGuard(handle))
     }
 }
 
@@ -77,22 +81,20 @@ fn connect(retry: bool) -> Result<HANDLE, u32> {
             return Ok(handle);
         }
 
-        let error = unsafe { GetLastError() };
-        if error == ERROR_PIPE_BUSY {
-            if unsafe { WaitNamedPipeW(pipe_path_wide.as_ptr(), PIPE_BUSY_TIMEOUT_MS) } != 0 {
-                let handle = open(&pipe_path_wide);
-                if handle != INVALID_HANDLE_VALUE {
-                    return Ok(handle);
+        match unsafe { GetLastError() } {
+            ERROR_PIPE_BUSY => {
+                if unsafe { WaitNamedPipeW(pipe_path_wide.as_ptr(), PIPE_BUSY_TIMEOUT_MS) } != FALSE {
+                    let handle = open(&pipe_path_wide);
+                    if handle != INVALID_HANDLE_VALUE {
+                        return Ok(handle);
+                    }
+                }
+                if !retry {
+                    return Err(unsafe { GetLastError() });
                 }
             }
-            if !retry {
-                return Err(unsafe { GetLastError() });
-            }
-            continue;
-        }
-
-        if error != ERROR_FILE_NOT_FOUND {
-            return Err(error);
+            ERROR_FILE_NOT_FOUND => {}
+            error => return Err(error),
         }
     }
 
@@ -114,7 +116,7 @@ fn write_bytes(handle: HANDLE, data: &[u8]) -> bool {
             data.len() as u32,
             &mut bytes_written,
             std::ptr::null_mut(),
-        ) != 0
+        ) != FALSE
     }
 }
 

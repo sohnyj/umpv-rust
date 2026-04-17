@@ -1,9 +1,8 @@
-use windows_sys::Win32::Foundation::ERROR_NO_MORE_ITEMS;
+use windows_sys::Win32::Foundation::{ERROR_NO_MORE_ITEMS, ERROR_SUCCESS};
 use windows_sys::Win32::System::Registry::*;
 use windows_sys::Win32::UI::Shell::{SHChangeNotify, SHCNE_ASSOCCHANGED, SHCNF_IDLIST};
-use windows_sys::Win32::UI::WindowsAndMessaging::MessageBoxW;
 
-use crate::{encode_wide, DEFAULT_LOADFILE_MODE};
+use crate::{encode_wide, show_message, DEFAULT_LOADFILE_MODE};
 
 const SUBKEY_FILE_ASSOCIATIONS: &str =
     r"Software\Clients\Media\mpv\Capabilities\FileAssociations";
@@ -11,23 +10,10 @@ const SUBKEY_UMPV_PROG_ID: &str = r"Software\Classes\io.mpv.umpv";
 const UMPV_PROG_ID: &str = "io.mpv.umpv";
 const MPV_PROG_ID: &str = "io.mpv.file";
 
-fn show_message(text: &str) {
-    let text_wide = encode_wide(text);
-    let caption_wide = encode_wide("umpv");
-    unsafe {
-        MessageBoxW(
-            std::ptr::null_mut(),
-            text_wide.as_ptr(),
-            caption_wide.as_ptr(),
-            0,
-        );
-    }
-}
-
-fn get_exe_path() -> String {
+fn get_exe_path() -> Option<String> {
     std::env::current_exe()
+        .ok()
         .map(|path| path.to_string_lossy().into_owned())
-        .unwrap_or_else(|_| "umpv.exe".to_string())
 }
 
 fn notify_shell_change() {
@@ -46,7 +32,9 @@ fn read_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> {
     let mut results = Vec::new();
     unsafe {
         let mut opened_key: HKEY = std::ptr::null_mut();
-        if RegOpenKeyExW(key, sub_key_wide.as_ptr(), 0, KEY_READ, &mut opened_key) != 0 {
+        if RegOpenKeyExW(key, sub_key_wide.as_ptr(), 0, KEY_READ, &mut opened_key) as u32
+            != ERROR_SUCCESS
+        {
             return results;
         }
 
@@ -72,7 +60,7 @@ fn read_values(key: HKEY, sub_key: &str) -> Vec<(String, String)> {
             if status == ERROR_NO_MORE_ITEMS {
                 break;
             }
-            if status != 0 {
+            if status != ERROR_SUCCESS {
                 index += 1;
                 continue;
             }
@@ -115,7 +103,8 @@ fn create_or_open_key(key: HKEY, sub_key: &str) -> Option<HKEY> {
             std::ptr::null(),
             &mut opened_key,
             std::ptr::null_mut(),
-        ) != 0
+        ) as u32
+            != ERROR_SUCCESS
         {
             return None;
         }
@@ -141,7 +130,8 @@ fn write_value(opened_key: HKEY, name: Option<&str>, data: &str) -> bool {
             REG_SZ,
             data_wide.as_ptr() as *const u8,
             (data_wide.len() * std::mem::size_of::<u16>()) as u32,
-        ) == 0
+        ) as u32
+            == ERROR_SUCCESS
     }
 }
 
@@ -182,7 +172,10 @@ pub fn register(loadfile_mode: Option<&str>) {
         std::process::exit(1);
     }
 
-    let umpv_path = get_exe_path();
+    let Some(umpv_path) = get_exe_path() else {
+        show_message("Failed to get umpv executable path.");
+        std::process::exit(1);
+    };
     let loadfile_mode = loadfile_mode.unwrap_or(DEFAULT_LOADFILE_MODE);
 
     if !matches!(
@@ -199,19 +192,31 @@ pub fn register(loadfile_mode: Option<&str>) {
         std::process::exit(1);
     }
 
-    if matches!(loadfile_mode, "append-play" | "insert-next-play") {
+    let loadfile_mode = if matches!(loadfile_mode, "append-play" | "insert-next-play") {
         let replacement = loadfile_mode.replacen("-play", "+play", 1);
         show_message(&format!(
-            "Warning: '{}' is deprecated since mpv 0.42.\nUse '{}' instead.",
+            "Warning: '{}' is deprecated since mpv 0.42.\nUsing '{}' instead.",
             loadfile_mode, replacement
         ));
-    }
+        replacement
+    } else {
+        loadfile_mode.to_string()
+    };
+
     let command = format!("\"{}\" --loadfile={} -- \"%L\"", umpv_path, loadfile_mode);
     let command_key = format!("{}\\shell\\open\\command", SUBKEY_UMPV_PROG_ID);
-    set_value(HKEY_CURRENT_USER, SUBKEY_UMPV_PROG_ID, None, "");
-    set_value(HKEY_CURRENT_USER, &command_key, None, &command);
+    if !set_value(HKEY_CURRENT_USER, SUBKEY_UMPV_PROG_ID, None, "")
+        || !set_value(HKEY_CURRENT_USER, &command_key, None, &command)
+    {
+        show_message("Failed to write umpv ProgID to registry.");
+        std::process::exit(1);
+    }
 
     let count = set_assocs(assocs.iter().map(|(ext, _)| ext), UMPV_PROG_ID);
+    if count == 0 {
+        show_message("Failed to register any file associations.");
+        std::process::exit(1);
+    }
 
     notify_shell_change();
     show_message(&format!(
