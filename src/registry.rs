@@ -172,10 +172,7 @@ pub fn register(loadfile_mode: Option<&str>) {
         std::process::exit(1);
     }
 
-    let Some(umpv_path) = get_exe_path() else {
-        show_message("Failed to get umpv executable path.");
-        std::process::exit(1);
-    };
+    let umpv_path = get_exe_path().expect("umpv.exe path should be available");
     let loadfile_mode = loadfile_mode.unwrap_or(DEFAULT_LOADFILE_MODE);
 
     if !matches!(

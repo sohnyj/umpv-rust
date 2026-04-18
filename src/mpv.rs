@@ -38,7 +38,7 @@ pub fn launch_mpv() -> std::io::Result<()> {
     let mpv_path = resolve_mpv_path().ok_or_else(|| {
         std::io::Error::new(
             std::io::ErrorKind::NotFound,
-            "cannot resolve mpv.exe path",
+            "mpv.exe not found.",
         )
     })?;
     Command::new(&mpv_path)
