@@ -78,21 +78,18 @@ fn main() {
         process::exit(1);
     };
 
-    let (result, existing) = match pipe::send_files(&files, loadfile_mode, false) {
-        ok @ Ok(_) => (ok, true),
+    match pipe::send_files(&files, loadfile_mode, false) {
+        Ok(pid) if pid != 0 => mpv::activate_mpv_window(pid),
+        Ok(_) => {}
         Err(SendError::Connect(ERROR_FILE_NOT_FOUND)) => {
             if let Err(err) = mpv::launch_mpv() {
                 show_message(&format!("Failed to launch mpv: {}", err));
                 process::exit(1);
             }
-            (pipe::send_files(&files, loadfile_mode, true), false)
+            if pipe::send_files(&files, loadfile_mode, true).is_err() {
+                process::exit(1);
+            }
         }
         Err(_) => process::exit(1),
-    };
-
-    match result {
-        Ok(pid) if existing && pid != 0 => mpv::activate_mpv_window(pid),
-        Err(_) => process::exit(1),
-        Ok(_) => {}
     }
 }
