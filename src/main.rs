@@ -7,7 +7,7 @@ use std::process;
 use windows_sys::Win32::Foundation::ERROR_FILE_NOT_FOUND;
 use windows_sys::Win32::UI::WindowsAndMessaging::MessageBoxW;
 
-use pipe::SendError;
+use pipe::{MutexError, SendError};
 
 mod mpv;
 mod pipe;
@@ -22,8 +22,19 @@ pub fn encode_wide(string: &str) -> Vec<u16> {
         .collect()
 }
 
-pub fn show_message(text: &str) {
-    let text_wide = encode_wide(text);
+pub enum Level {
+    Error,
+    Info,
+    Warning,
+}
+
+pub fn show_message(kind: Level, text: &str) {
+    let prefix = match kind {
+        Level::Error => "Error",
+        Level::Info => "Info",
+        Level::Warning => "Warning",
+    };
+    let text_wide = encode_wide(&format!("{}: {}", prefix, text));
     let caption_wide = encode_wide("umpv");
     unsafe {
         MessageBoxW(
@@ -33,6 +44,11 @@ pub fn show_message(text: &str) {
             0,
         );
     }
+}
+
+pub fn error_exit(text: &str) -> ! {
+    show_message(Level::Error, text);
+    process::exit(1);
 }
 
 fn parse_loadfile_mode(args: &[String]) -> Option<&str> {
@@ -49,10 +65,11 @@ fn main() {
     };
 
     let args: Vec<String> = env::args().skip(1).collect();
+    let loadfile_mode = parse_loadfile_mode(&args);
 
     match args.first().map(String::as_str) {
         Some("--register") => {
-            registry::register(parse_loadfile_mode(&args));
+            registry::register(loadfile_mode);
             return;
         }
         Some("--unregister") => {
@@ -66,7 +83,7 @@ fn main() {
         return;
     }
 
-    let loadfile_mode = parse_loadfile_mode(&args).unwrap_or(DEFAULT_LOADFILE_MODE);
+    let loadfile_mode = loadfile_mode.unwrap_or(DEFAULT_LOADFILE_MODE);
 
     let files: Vec<String> = args
         .iter()
@@ -74,22 +91,22 @@ fn main() {
         .map(|arg| mpv::resolve_file_path(arg))
         .collect();
 
-    let Ok(_mutex) = pipe::acquire_mutex() else {
-        process::exit(1);
+    let _mutex = match pipe::acquire_mutex() {
+        Ok(guard) => guard,
+        Err(MutexError::Timeout) => error_exit("Failed to acquire lock: an mpv instance is not responding."),
+        Err(MutexError::Create) => error_exit("Failed to create umpv lock."),
     };
 
     match pipe::send_files(&files, loadfile_mode, false) {
-        Ok(pid) if pid != 0 => mpv::activate_mpv_window(pid),
-        Ok(_) => {}
+        Ok(pid) => mpv::activate_mpv_window(pid),
         Err(SendError::Connect(ERROR_FILE_NOT_FOUND)) => {
             if let Err(err) = mpv::launch_mpv() {
-                show_message(&format!("Failed to launch mpv: {}", err));
-                process::exit(1);
+                error_exit(&format!("Failed to launch mpv: {}", err));
             }
             if pipe::send_files(&files, loadfile_mode, true).is_err() {
-                process::exit(1);
+                error_exit("Failed to send files to mpv.");
             }
         }
-        Err(_) => process::exit(1),
+        Err(_) => error_exit("Failed to connect to mpv."),
     }
 }

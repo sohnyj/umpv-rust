@@ -49,28 +49,29 @@ pub fn launch_mpv() -> std::io::Result<()> {
 }
 
 unsafe extern "system" fn find_mpv_window(hwnd: HWND, lparam: LPARAM) -> BOOL {
-    let target_pid = lparam as u32;
-    let mut pid: u32 = 0;
-    unsafe { GetWindowThreadProcessId(hwnd, &mut pid) };
-    if pid != target_pid {
-        return TRUE;
-    }
-    let mut class_name = [0u16; 16];
-    let length = unsafe {
-        GetClassNameW(hwnd, class_name.as_mut_ptr(), class_name.len() as i32)
-    };
-    if length as usize == MPV_WINDOW_CLASS_NAME.len()
-        && class_name[..MPV_WINDOW_CLASS_NAME.len()] == MPV_WINDOW_CLASS_NAME
-    {
-        if unsafe { IsIconic(hwnd) } != FALSE {
-            unsafe { ShowWindow(hwnd, SW_RESTORE) };
+    unsafe {
+        let target_pid = lparam as u32;
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(hwnd, &mut pid);
+        if pid != target_pid {
+            return TRUE;
         }
-        unsafe { SetForegroundWindow(hwnd) };
-        return FALSE;
+        let mut class_name = [0u16; 16];
+        let length = GetClassNameW(hwnd, class_name.as_mut_ptr(), class_name.len() as i32);
+        if class_name.get(..length as usize) == Some(&MPV_WINDOW_CLASS_NAME[..]) {
+            if IsIconic(hwnd) != FALSE {
+                ShowWindow(hwnd, SW_RESTORE);
+            }
+            SetForegroundWindow(hwnd);
+            return FALSE;
+        }
+        TRUE
     }
-    TRUE
 }
 
 pub fn activate_mpv_window(pid: u32) {
+    if pid == 0 {
+        return;
+    }
     unsafe { EnumWindows(Some(find_mpv_window), pid as LPARAM) };
 }

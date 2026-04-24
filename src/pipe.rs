@@ -13,6 +13,11 @@ use windows_sys::Win32::System::Threading::{
 
 use crate::encode_wide;
 
+pub enum MutexError {
+    Create,
+    Timeout,
+}
+
 pub enum SendError {
     Connect(u32),
     Write,
@@ -20,6 +25,10 @@ pub enum SendError {
 
 const MUTEX_NAME: &str = "umpv_mutex";
 const MUTEX_TIMEOUT_MS: u32 = 10_000;
+const PIPE_BUSY_TIMEOUT_MS: u32 = 5000;
+pub const PIPE_PATH: &str = r"\\.\pipe\umpv";
+const RETRY_INTERVAL_MS: u64 = 100;
+const RETRY_MAX_ATTEMPTS: u32 = 50;
 
 pub struct MutexGuard(HANDLE);
 
@@ -32,26 +41,21 @@ impl Drop for MutexGuard {
     }
 }
 
-pub fn acquire_mutex() -> Result<MutexGuard, ()> {
+pub fn acquire_mutex() -> Result<MutexGuard, MutexError> {
     let mutex_name_wide = encode_wide(MUTEX_NAME);
     unsafe {
         let handle = CreateMutexW(std::ptr::null(), 0, mutex_name_wide.as_ptr());
         if handle.is_null() {
-            return Err(());
+            return Err(MutexError::Create);
         }
         let wait_result = WaitForSingleObject(handle, MUTEX_TIMEOUT_MS);
         if wait_result != WAIT_OBJECT_0 && wait_result != WAIT_ABANDONED {
             CloseHandle(handle);
-            return Err(());
+            return Err(MutexError::Timeout);
         }
         Ok(MutexGuard(handle))
     }
 }
-
-pub const PIPE_PATH: &str = r"\\.\pipe\umpv";
-const PIPE_BUSY_TIMEOUT_MS: u32 = 5000;
-const RETRY_MAX_ATTEMPTS: u32 = 50;
-const RETRY_INTERVAL_MS: u64 = 100;
 
 fn open(pipe_path_wide: &[u16]) -> HANDLE {
     unsafe {
@@ -81,20 +85,19 @@ fn connect(retry: bool) -> Result<HANDLE, u32> {
             return Ok(handle);
         }
 
-        match unsafe { GetLastError() } {
-            ERROR_PIPE_BUSY => {
-                if unsafe { WaitNamedPipeW(pipe_path_wide.as_ptr(), PIPE_BUSY_TIMEOUT_MS) } != FALSE {
-                    let handle = open(&pipe_path_wide);
-                    if handle != INVALID_HANDLE_VALUE {
-                        return Ok(handle);
+        unsafe {
+            match GetLastError() {
+                ERROR_PIPE_BUSY => {
+                    if WaitNamedPipeW(pipe_path_wide.as_ptr(), PIPE_BUSY_TIMEOUT_MS) != FALSE {
+                        let handle = open(&pipe_path_wide);
+                        if handle != INVALID_HANDLE_VALUE {
+                            return Ok(handle);
+                        }
                     }
                 }
-                if !retry {
-                    return Err(unsafe { GetLastError() });
-                }
+                ERROR_FILE_NOT_FOUND => {}
+                error => return Err(error),
             }
-            ERROR_FILE_NOT_FOUND => {}
-            error => return Err(error),
         }
     }
 

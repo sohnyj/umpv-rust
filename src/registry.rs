@@ -1,8 +1,10 @@
+use std::path::PathBuf;
+
 use windows_sys::Win32::Foundation::{ERROR_NO_MORE_ITEMS, ERROR_SUCCESS};
 use windows_sys::Win32::System::Registry::*;
 use windows_sys::Win32::UI::Shell::{SHChangeNotify, SHCNE_ASSOCCHANGED, SHCNF_IDLIST};
 
-use crate::{encode_wide, show_message, DEFAULT_LOADFILE_MODE};
+use crate::{encode_wide, error_exit, show_message, Level, DEFAULT_LOADFILE_MODE};
 
 const SUBKEY_FILE_ASSOCIATIONS: &str =
     r"Software\Clients\Media\mpv\Capabilities\FileAssociations";
@@ -10,10 +12,8 @@ const SUBKEY_UMPV_PROG_ID: &str = r"Software\Classes\io.mpv.umpv";
 const UMPV_PROG_ID: &str = "io.mpv.umpv";
 const MPV_PROG_ID: &str = "io.mpv.file";
 
-fn get_exe_path() -> Option<String> {
-    std::env::current_exe()
-        .ok()
-        .map(|path| path.to_string_lossy().into_owned())
+fn resolve_umpv_path() -> Option<PathBuf> {
+    std::env::current_exe().ok()
 }
 
 fn notify_shell_change() {
@@ -168,11 +168,10 @@ pub fn register(loadfile_mode: Option<&str>) {
     let assocs =
         read_assocs(HKEY_CURRENT_USER, SUBKEY_FILE_ASSOCIATIONS);
     if assocs.is_empty() {
-        show_message("No mpv file associations found.\nRun 'mpv.exe --register' first.");
-        std::process::exit(1);
+        error_exit("No mpv file associations found.\nRun 'mpv.exe --register' first.");
     }
 
-    let umpv_path = get_exe_path().expect("umpv.exe path should be available");
+    let umpv_path = resolve_umpv_path().expect("umpv.exe path");
     let loadfile_mode = loadfile_mode.unwrap_or(DEFAULT_LOADFILE_MODE);
 
     if !matches!(
@@ -185,14 +184,13 @@ pub fn register(loadfile_mode: Option<&str>) {
             | "insert-next+play"
             | "insert-next-play"
     ) {
-        show_message(&format!("Unsupported loadfile flag: {}", loadfile_mode));
-        std::process::exit(1);
+        error_exit(&format!("Unsupported loadfile flag: {}", loadfile_mode));
     }
 
     let loadfile_mode = if matches!(loadfile_mode, "append-play" | "insert-next-play") {
-        let replacement = loadfile_mode.replacen("-play", "+play", 1);
-        show_message(&format!(
-            "Warning: '{}' is deprecated since mpv 0.42.\nUsing '{}' instead.",
+        let replacement = loadfile_mode.replace("-play", "+play");
+        show_message(Level::Warning, &format!(
+            "'{}' is deprecated since mpv 0.42.\nUsing '{}' instead.",
             loadfile_mode, replacement
         ));
         replacement
@@ -200,23 +198,21 @@ pub fn register(loadfile_mode: Option<&str>) {
         loadfile_mode.to_string()
     };
 
-    let command = format!("\"{}\" --loadfile={} -- \"%L\"", umpv_path, loadfile_mode);
+    let command = format!("\"{}\" --loadfile={} -- \"%L\"", umpv_path.display(), loadfile_mode);
     let command_key = format!("{}\\shell\\open\\command", SUBKEY_UMPV_PROG_ID);
     if !set_value(HKEY_CURRENT_USER, SUBKEY_UMPV_PROG_ID, None, "")
         || !set_value(HKEY_CURRENT_USER, &command_key, None, &command)
     {
-        show_message("Failed to write umpv ProgID to registry.");
-        std::process::exit(1);
+        error_exit("Failed to write umpv ProgID to registry.");
     }
 
     let count = set_assocs(assocs.iter().map(|(ext, _)| ext), UMPV_PROG_ID);
     if count == 0 {
-        show_message("Failed to register any file associations.");
-        std::process::exit(1);
+        error_exit("Failed to register any file associations.");
     }
 
     notify_shell_change();
-    show_message(&format!(
+    show_message(Level::Info, &format!(
         "umpv registered for {} file extension(s).\nloadfile: {}",
         count, loadfile_mode
     ));
@@ -232,7 +228,7 @@ pub fn unregister() {
         .collect();
 
     if umpv_assocs.is_empty() {
-        show_message("Nothing to unregister.");
+        show_message(Level::Info, "Nothing to unregister.");
         return;
     }
 
@@ -241,7 +237,7 @@ pub fn unregister() {
     delete_tree(HKEY_CURRENT_USER, SUBKEY_UMPV_PROG_ID);
 
     notify_shell_change();
-    show_message(&format!(
+    show_message(Level::Info, &format!(
         "umpv unregistered for {} file extension(s).",
         count
     ));
