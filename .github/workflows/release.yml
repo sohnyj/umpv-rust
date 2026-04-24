@@ -25,7 +25,7 @@ jobs:
         id: version
         run: |
           if [ "${{ inputs.auto_tag }}" = "true" ]; then
-            echo "tag=v$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')" >> "$GITHUB_OUTPUT"
+            echo "tag=v$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           else
             echo "tag=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
           fi
