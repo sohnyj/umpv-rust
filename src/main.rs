@@ -28,8 +28,8 @@ pub enum Level {
     Warning,
 }
 
-pub fn show_message(kind: Level, text: &str) {
-    let prefix = match kind {
+pub fn show_message(level: Level, text: &str) {
+    let prefix = match level {
         Level::Error => "Error",
         Level::Info => "Info",
         Level::Warning => "Warning",
@@ -52,9 +52,7 @@ pub fn error_exit(text: &str) -> ! {
 }
 
 fn parse_loadfile_mode(args: &[String]) -> Option<&str> {
-    args
-        .iter()
-        .find_map(|arg| arg.strip_prefix("--loadfile="))
+    args.iter().find_map(|arg| arg.strip_prefix("--loadfile="))
 }
 
 fn main() {

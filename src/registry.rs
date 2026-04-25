@@ -1,20 +1,16 @@
-use std::path::PathBuf;
-
 use windows_sys::Win32::Foundation::{ERROR_NO_MORE_ITEMS, ERROR_SUCCESS};
-use windows_sys::Win32::System::Registry::*;
+use windows_sys::Win32::System::Registry::{
+    HKEY, HKEY_CURRENT_USER, KEY_READ, KEY_WRITE, REG_OPTION_NON_VOLATILE, REG_SZ, RegCloseKey,
+    RegCreateKeyExW, RegDeleteTreeW, RegEnumValueW, RegOpenKeyExW, RegSetValueExW,
+};
 use windows_sys::Win32::UI::Shell::{SHChangeNotify, SHCNE_ASSOCCHANGED, SHCNF_IDLIST};
 
 use crate::{encode_wide, error_exit, show_message, Level, DEFAULT_LOADFILE_MODE};
 
-const SUBKEY_FILE_ASSOCIATIONS: &str =
-    r"Software\Clients\Media\mpv\Capabilities\FileAssociations";
+const SUBKEY_FILE_ASSOCIATIONS: &str = r"Software\Clients\Media\mpv\Capabilities\FileAssociations";
 const SUBKEY_UMPV_PROG_ID: &str = r"Software\Classes\io.mpv.umpv";
 const UMPV_PROG_ID: &str = "io.mpv.umpv";
 const MPV_PROG_ID: &str = "io.mpv.file";
-
-fn resolve_umpv_path() -> Option<PathBuf> {
-    std::env::current_exe().ok()
-}
 
 fn notify_shell_change() {
     unsafe {
@@ -165,13 +161,12 @@ fn delete_tree(key: HKEY, sub_key: &str) {
 }
 
 pub fn register(loadfile_mode: Option<&str>) {
-    let assocs =
-        read_assocs(HKEY_CURRENT_USER, SUBKEY_FILE_ASSOCIATIONS);
+    let assocs = read_assocs(HKEY_CURRENT_USER, SUBKEY_FILE_ASSOCIATIONS);
     if assocs.is_empty() {
         error_exit("No mpv file associations found.\nRun 'mpv.exe --register' first.");
     }
 
-    let umpv_path = resolve_umpv_path().expect("umpv.exe path");
+    let umpv_path = std::env::current_exe().expect("umpv.exe path");
     let loadfile_mode = loadfile_mode.unwrap_or(DEFAULT_LOADFILE_MODE);
 
     if !matches!(
@@ -219,8 +214,7 @@ pub fn register(loadfile_mode: Option<&str>) {
 }
 
 pub fn unregister() {
-    let assocs =
-        read_assocs(HKEY_CURRENT_USER, SUBKEY_FILE_ASSOCIATIONS);
+    let assocs = read_assocs(HKEY_CURRENT_USER, SUBKEY_FILE_ASSOCIATIONS);
 
     let umpv_assocs: Vec<_> = assocs
         .iter()

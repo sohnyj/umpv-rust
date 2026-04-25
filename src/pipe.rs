@@ -25,7 +25,7 @@ pub enum SendError {
 
 const MUTEX_NAME: &str = "umpv_mutex";
 const MUTEX_TIMEOUT_MS: u32 = 10_000;
-const PIPE_BUSY_TIMEOUT_MS: u32 = 5000;
+const PIPE_BUSY_TIMEOUT_MS: u32 = 5_000;
 pub const PIPE_PATH: &str = r"\\.\pipe\umpv";
 const RETRY_INTERVAL_MS: u64 = 100;
 const RETRY_MAX_ATTEMPTS: u32 = 50;
