@@ -77,6 +77,26 @@ URLs (`scheme://...`) are passed through to mpv as-is without path resolution.
 
 See the [mpv documentation](https://mpv.io/manual/master/#command-interface-[%3Coptions%3E]]]) for the full list of options.
 
+## Building
+
+### Requirements
+
+- [Rust](https://www.rust-lang.org/tools/install) (stable)
+- [cargo-xwin](https://github.com/rust-cross/cargo-xwin): cross-compiles to Windows MSVC target on Linux/macOS
+- `llvm-rc`: included in the LLVM package (`llvm` on apt, `llvm` on Homebrew)
+
+```bash
+cargo install cargo-xwin
+```
+
+### Build
+
+```bash
+cargo xwin build --release
+```
+
+Output: `target/x86_64-pc-windows-msvc/release/umpv.exe`
+
 ## Acknowledgements
 
 `mpv-icon.ico` is property of the [mpv project](https://github.com/mpv-player/mpv).
