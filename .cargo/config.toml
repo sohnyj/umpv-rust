@@ -1,1 +1,2 @@
-[target.x86_64-pc-windows-msvc]
+[build]
+target = "x86_64-pc-windows-msvc"
