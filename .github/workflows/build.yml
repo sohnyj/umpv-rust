@@ -15,6 +15,9 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
+      - name: Install LLVM
+        run: sudo apt-get install -y llvm
+
       - name: Install cargo-xwin
         run: cargo install cargo-xwin
 
