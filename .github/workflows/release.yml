@@ -33,16 +33,16 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-pc-windows-gnu
+          targets: x86_64-pc-windows-msvc
 
-      - name: Install MinGW-w64
-        run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64
+      - name: Install cargo-xwin
+        run: cargo install cargo-xwin
 
       - name: Build
-        run: cargo build --release --target x86_64-pc-windows-gnu
+        run: cargo xwin build --release --target x86_64-pc-windows-msvc
 
       - name: Compress
-        working-directory: target/x86_64-pc-windows-gnu/release
+        working-directory: target/x86_64-pc-windows-msvc/release
         run: 7z a -mx=9 ${{ github.workspace }}/umpv-rust.7z umpv.exe
 
       - name: Release
