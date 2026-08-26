@@ -23,7 +23,12 @@ fn notify_shell_change() {
     }
 }
 
-fn read_associations() -> Vec<(String, String)> {
+struct FileAssociation {
+    extension: String,
+    prog_id: String,
+}
+
+fn read_associations() -> Vec<FileAssociation> {
     let Ok(key) = CURRENT_USER.open(SUBKEY_FILE_ASSOCIATIONS) else {
         return Vec::new();
     };
@@ -32,7 +37,12 @@ fn read_associations() -> Vec<(String, String)> {
     };
     values
         .filter(|(name, _)| name.starts_with('.') && name.len() > 1)
-        .filter_map(|(name, value)| Some((name, String::try_from(value).ok()?)))
+        .filter_map(|(name, value)| {
+            Some(FileAssociation {
+                extension: name,
+                prog_id: String::try_from(value).ok()?,
+            })
+        })
         .collect()
 }
 
@@ -66,7 +76,9 @@ pub(crate) fn register(command: &str) -> Result<usize, Error> {
     write_prog_id(command).map_err(|_| Error::ProgIdWriteFailed)?;
 
     let count = set_associations(
-        associations.iter().map(|(extension, _)| extension.as_str()),
+        associations
+            .iter()
+            .map(|association| association.extension.as_str()),
         UMPV_PROG_ID,
     );
     if count == 0 {
@@ -81,8 +93,8 @@ pub(crate) fn unregister() -> usize {
     let associations = read_associations();
     let umpv_extensions: Vec<&str> = associations
         .iter()
-        .filter(|(_, prog_id)| prog_id == UMPV_PROG_ID)
-        .map(|(extension, _)| extension.as_str())
+        .filter(|association| association.prog_id == UMPV_PROG_ID)
+        .map(|association| association.extension.as_str())
         .collect();
 
     let count = if umpv_extensions.is_empty() {

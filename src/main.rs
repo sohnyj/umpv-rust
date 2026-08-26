@@ -16,19 +16,19 @@ fn encode_wide(string: &str) -> Vec<u16> {
     string.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
-fn show_message(heading: &str, text: &str) {
-    let text_wide = encode_wide(&format!("{heading}\n{text}"));
+fn show_message(text: &str) {
+    let text_wide = encode_wide(text);
     unsafe {
         MessageBoxW(std::ptr::null_mut(), text_wide.as_ptr(), w!("umpv"), 0);
     }
 }
 
 fn show_information(text: &str) {
-    show_message("Info", text);
+    show_message(&format!("Info\n{text}"));
 }
 
 fn error_exit(text: &str) -> ! {
-    show_message("Error", text);
+    show_message(&format!("Error\n{text}"));
     process::exit(1);
 }
 
@@ -103,7 +103,7 @@ fn absolute_file_path(file: &str) -> String {
     }
 }
 
-fn first_file(files: &[String]) -> Option<&str> {
+fn first_non_empty_file(files: &[String]) -> Option<&str> {
     files
         .iter()
         .map(String::as_str)
@@ -163,31 +163,36 @@ fn unregister() {
     }
 }
 
-enum PlayError {
+enum OpenError {
     Lock(lock::Error),
     Mpv(mpv::Error),
     ConnectFailed,
     WriteFailed,
 }
 
-fn send_or_launch(file: &str, loadfile_flags: &str) -> Result<Option<u32>, PlayError> {
-    let _lock_guard = lock::acquire().map_err(PlayError::Lock)?;
+enum MpvInstance {
+    Running { pid: Option<u32> },
+    Launched,
+}
+
+fn open_in_mpv(file: &str, loadfile_flags: &str) -> Result<MpvInstance, OpenError> {
+    let _lock_guard = lock::acquire().map_err(OpenError::Lock)?;
 
     match pipe::send_file(file, loadfile_flags) {
-        Ok(pid) => Ok(pid),
+        Ok(pid) => Ok(MpvInstance::Running { pid }),
         Err(pipe::Error::NoServer) => {
             let mpv_path = umpv_path().with_file_name("mpv.exe");
             mpv::launch(&mpv_path, file)
-                .map(|()| None)
-                .map_err(PlayError::Mpv)
+                .map(|()| MpvInstance::Launched)
+                .map_err(OpenError::Mpv)
         }
-        Err(pipe::Error::ConnectFailed) => Err(PlayError::ConnectFailed),
-        Err(pipe::Error::WriteFailed) => Err(PlayError::WriteFailed),
+        Err(pipe::Error::ConnectFailed) => Err(OpenError::ConnectFailed),
+        Err(pipe::Error::WriteFailed) => Err(OpenError::WriteFailed),
     }
 }
 
 fn play(files: &[String], loadfile_flags: &str) {
-    let Some(file) = first_file(files) else {
+    let Some(file) = first_non_empty_file(files) else {
         return;
     };
     if has_url_scheme(file) {
@@ -195,29 +200,30 @@ fn play(files: &[String], loadfile_flags: &str) {
     }
     let file = absolute_file_path(file);
 
-    match send_or_launch(&file, loadfile_flags) {
-        Ok(Some(pid)) => mpv::activate_window(pid),
-        Ok(None) => {}
-        Err(PlayError::Lock(lock::Error::CreateFailed)) => {
+    match open_in_mpv(&file, loadfile_flags) {
+        Ok(MpvInstance::Running { pid: Some(pid) }) => mpv::activate_window(pid),
+        Ok(MpvInstance::Running { pid: None }) => {}
+        Ok(MpvInstance::Launched) => {}
+        Err(OpenError::Lock(lock::Error::CreateFailed)) => {
             error_exit("Failed to create umpv lock.")
         }
-        Err(PlayError::Lock(lock::Error::WaitFailed)) => {
+        Err(OpenError::Lock(lock::Error::WaitFailed)) => {
             error_exit("Failed to wait for umpv lock.")
         }
-        Err(PlayError::Lock(lock::Error::TimedOut)) => {
+        Err(OpenError::Lock(lock::Error::TimedOut)) => {
             error_exit("Timed out waiting for umpv lock.\nAnother umpv instance is holding it.")
         }
-        Err(PlayError::Mpv(mpv::Error::SpawnFailed(error))) => {
+        Err(OpenError::Mpv(mpv::Error::SpawnFailed(error))) => {
             error_exit(&format!("Failed to launch mpv.exe: {error}"))
         }
-        Err(PlayError::Mpv(mpv::Error::Exited)) => {
+        Err(OpenError::Mpv(mpv::Error::Exited)) => {
             error_exit("mpv.exe exited before it opened the file.")
         }
-        Err(PlayError::Mpv(mpv::Error::StartupTimedOut)) => {
+        Err(OpenError::Mpv(mpv::Error::StartupTimedOut)) => {
             error_exit("Timed out waiting for mpv.exe to start.")
         }
-        Err(PlayError::ConnectFailed) => error_exit("Failed to connect to mpv."),
-        Err(PlayError::WriteFailed) => error_exit("Failed to send the file to mpv."),
+        Err(OpenError::ConnectFailed) => error_exit("Failed to connect to mpv."),
+        Err(OpenError::WriteFailed) => error_exit("Failed to send the file to mpv."),
     }
 }
 
