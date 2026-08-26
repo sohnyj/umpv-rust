@@ -157,9 +157,17 @@ fn register(loadfile_flags: &str) {
 }
 
 fn unregister() {
-    match registry::unregister() {
-        0 => show_information("Nothing to unregister."),
-        count => show_information(&format!("Unregistered for {count} file extension(s).")),
+    let registry::Unregistered {
+        extensions,
+        removed_prog_id,
+    } = registry::unregister();
+
+    match (extensions, removed_prog_id) {
+        (0, false) => show_information("Nothing to unregister."),
+        (0, true) => {
+            show_information("Removed the umpv ProgID.\nNo file extensions were pointing at umpv.")
+        }
+        _ => show_information(&format!("Unregistered for {extensions} file extension(s).")),
     }
 }
 
