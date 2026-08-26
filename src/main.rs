@@ -60,9 +60,6 @@ fn find_unknown_option(options: &[String]) -> Option<&str> {
         .find(|option| !is_known_option(option))
 }
 
-const OPTION_PREFIX: &str = "--";
-const END_OF_OPTIONS: &str = "--";
-
 struct Arguments {
     options: Vec<String>,
     files: Vec<String>,
@@ -74,9 +71,9 @@ fn split_arguments(arguments: impl IntoIterator<Item = String>) -> Arguments {
     let mut past_end_of_options = false;
 
     for argument in arguments {
-        if past_end_of_options || !argument.starts_with(OPTION_PREFIX) {
+        if past_end_of_options || !argument.starts_with("--") {
             files.push(argument);
-        } else if argument == END_OF_OPTIONS {
+        } else if argument == "--" {
             past_end_of_options = true;
         } else {
             options.push(argument);
