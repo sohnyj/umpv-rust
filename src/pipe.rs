@@ -5,9 +5,13 @@ use std::os::windows::io::AsRawHandle;
 use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
-use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_PIPE_BUSY, FALSE};
+use windows_sys::Win32::Foundation::{
+    ERROR_FILE_NOT_FOUND, ERROR_PIPE_BUSY, ERROR_SEM_TIMEOUT, FALSE,
+};
 use windows_sys::Win32::Storage::FileSystem::SECURITY_IDENTIFICATION;
-use windows_sys::Win32::System::Pipes::{GetNamedPipeServerProcessId, WaitNamedPipeW};
+use windows_sys::Win32::System::Pipes::{
+    GetNamedPipeServerProcessId, NMPWAIT_NOWAIT, WaitNamedPipeW,
+};
 use windows_sys::Win32::System::RemoteDesktop::ProcessIdToSessionId;
 use windows_sys::Win32::System::Threading::GetCurrentProcessId;
 
@@ -51,10 +55,10 @@ fn error_code(error: &std::io::Error) -> Option<u32> {
 }
 
 pub(crate) fn server_exists() -> bool {
-    match open_pipe() {
-        Ok(_) => true,
-        Err(error) => error_code(&error) == Some(ERROR_PIPE_BUSY),
+    if unsafe { WaitNamedPipeW(path_wide().as_ptr(), NMPWAIT_NOWAIT) } != FALSE {
+        return true;
     }
+    error_code(&std::io::Error::last_os_error()) == Some(ERROR_SEM_TIMEOUT)
 }
 
 fn connect() -> Result<File, Error> {
