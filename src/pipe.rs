@@ -34,6 +34,11 @@ pub(crate) fn path() -> &'static str {
     &PATH
 }
 
+fn path_wide() -> &'static [u16] {
+    static PATH_WIDE: LazyLock<Vec<u16>> = LazyLock::new(|| encode_wide(path()));
+    &PATH_WIDE
+}
+
 fn open_pipe() -> std::io::Result<File> {
     OpenOptions::new()
         .write(true)
@@ -54,7 +59,6 @@ pub(crate) fn server_exists() -> bool {
 
 fn connect() -> Result<File, Error> {
     let timeout_at = Instant::now() + CONNECT_TIMEOUT;
-    let pipe_path_wide = encode_wide(path());
 
     loop {
         match open_pipe() {
@@ -71,7 +75,7 @@ fn connect() -> Result<File, Error> {
             return Err(Error::ConnectFailed);
         }
         let timeout_milliseconds = u32::try_from(remaining.as_millis()).unwrap_or(u32::MAX);
-        unsafe { WaitNamedPipeW(pipe_path_wide.as_ptr(), timeout_milliseconds) };
+        unsafe { WaitNamedPipeW(path_wide().as_ptr(), timeout_milliseconds) };
     }
 }
 
