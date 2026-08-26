@@ -20,7 +20,7 @@ pub(crate) enum Error {
 }
 
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(5);
-const POLL_INTERVAL: Duration = Duration::from_millis(25);
+const POLL_INTERVAL: Duration = Duration::from_millis(5);
 
 pub(crate) fn launch(mpv_path: &Path, file: &str) -> Result<(), Error> {
     let mut mpv_process = Command::new(mpv_path)
