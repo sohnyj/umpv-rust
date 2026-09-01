@@ -24,6 +24,7 @@ pub(crate) enum Error {
 }
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const INSTANCE_WAIT_MILLISECONDS: u32 = 5;
 
 fn session_id() -> u32 {
     let mut session_id: u32 = 0;
@@ -73,13 +74,10 @@ fn connect() -> Result<File, Error> {
                 _ => return Err(Error::ConnectFailed),
             },
         }
-
-        let remaining = timeout_at.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
+        if Instant::now() >= timeout_at {
             return Err(Error::ConnectFailed);
         }
-        let timeout_milliseconds = u32::try_from(remaining.as_millis()).unwrap_or(u32::MAX);
-        unsafe { WaitNamedPipeW(path_wide().as_ptr(), timeout_milliseconds) };
+        unsafe { WaitNamedPipeW(path_wide().as_ptr(), INSTANCE_WAIT_MILLISECONDS) };
     }
 }
 
