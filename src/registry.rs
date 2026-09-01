@@ -90,7 +90,7 @@ pub(crate) fn register(command: &str) -> Result<usize, Error> {
 }
 
 pub(crate) struct Unregistered {
-    pub(crate) extensions: usize,
+    pub(crate) extension_count: usize,
     pub(crate) removed_prog_id: bool,
 }
 
@@ -102,18 +102,18 @@ pub(crate) fn unregister() -> Unregistered {
         .map(|association| association.extension.as_str())
         .collect();
 
-    let extensions = if umpv_extensions.is_empty() {
+    let extension_count = if umpv_extensions.is_empty() {
         0
     } else {
         set_associations(umpv_extensions, MPV_PROG_ID)
     };
     let removed_prog_id = CURRENT_USER.remove_tree(SUBKEY_UMPV_PROG_ID).is_ok();
 
-    if extensions > 0 || removed_prog_id {
+    if extension_count > 0 || removed_prog_id {
         notify_shell_change();
     }
     Unregistered {
-        extensions,
+        extension_count,
         removed_prog_id,
     }
 }
