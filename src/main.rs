@@ -170,31 +170,38 @@ fn unregister() {
     }
 }
 
-enum OpenError {
-    Lock(lock::Error),
-    Mpv(mpv::Error),
-    ConnectFailed,
-    WriteFailed,
-}
-
 enum MpvInstance {
     Running { pid: Option<u32> },
     Launched,
 }
 
-fn open_in_mpv(file: &str, loadfile_flags: &str) -> Result<MpvInstance, OpenError> {
-    let _lock_guard = lock::acquire().map_err(OpenError::Lock)?;
+fn launch_mpv(file: &str) -> MpvInstance {
+    let mpv_path = umpv_path().with_file_name("mpv.exe");
+    match mpv::launch(&mpv_path, file) {
+        Ok(()) => MpvInstance::Launched,
+        Err(mpv::Error::SpawnFailed(error)) => {
+            error_exit(&format!("Failed to launch mpv.exe: {error}"))
+        }
+        Err(mpv::Error::Exited) => error_exit("mpv.exe exited before it opened the file."),
+        Err(mpv::Error::StartupTimedOut) => error_exit("Timed out waiting for mpv.exe to start."),
+    }
+}
+
+fn open_in_mpv(file: &str, loadfile_flags: &str) -> MpvInstance {
+    let _lock_guard = match lock::acquire() {
+        Ok(guard) => guard,
+        Err(lock::Error::CreateFailed) => error_exit("Failed to create umpv lock."),
+        Err(lock::Error::WaitFailed) => error_exit("Failed to wait for umpv lock."),
+        Err(lock::Error::TimedOut) => {
+            error_exit("Timed out waiting for umpv lock.\nAnother umpv instance is holding it.")
+        }
+    };
 
     match pipe::send_file(file, loadfile_flags) {
-        Ok(pid) => Ok(MpvInstance::Running { pid }),
-        Err(pipe::Error::NoServer) => {
-            let mpv_path = umpv_path().with_file_name("mpv.exe");
-            mpv::launch(&mpv_path, file)
-                .map(|()| MpvInstance::Launched)
-                .map_err(OpenError::Mpv)
-        }
-        Err(pipe::Error::ConnectFailed) => Err(OpenError::ConnectFailed),
-        Err(pipe::Error::WriteFailed) => Err(OpenError::WriteFailed),
+        Ok(pid) => MpvInstance::Running { pid },
+        Err(pipe::Error::NoServer) => launch_mpv(file),
+        Err(pipe::Error::ConnectFailed) => error_exit("Failed to connect to mpv."),
+        Err(pipe::Error::WriteFailed) => error_exit("Failed to send the file to mpv."),
     }
 }
 
@@ -208,29 +215,9 @@ fn open(files: &[String], loadfile_flags: &str) {
     let file = absolute_file_path(file);
 
     match open_in_mpv(&file, loadfile_flags) {
-        Ok(MpvInstance::Running { pid: Some(pid) }) => mpv::activate_window(pid),
-        Ok(MpvInstance::Running { pid: None }) => {}
-        Ok(MpvInstance::Launched) => {}
-        Err(OpenError::Lock(lock::Error::CreateFailed)) => {
-            error_exit("Failed to create umpv lock.")
-        }
-        Err(OpenError::Lock(lock::Error::WaitFailed)) => {
-            error_exit("Failed to wait for umpv lock.")
-        }
-        Err(OpenError::Lock(lock::Error::TimedOut)) => {
-            error_exit("Timed out waiting for umpv lock.\nAnother umpv instance is holding it.")
-        }
-        Err(OpenError::Mpv(mpv::Error::SpawnFailed(error))) => {
-            error_exit(&format!("Failed to launch mpv.exe: {error}"))
-        }
-        Err(OpenError::Mpv(mpv::Error::Exited)) => {
-            error_exit("mpv.exe exited before it opened the file.")
-        }
-        Err(OpenError::Mpv(mpv::Error::StartupTimedOut)) => {
-            error_exit("Timed out waiting for mpv.exe to start.")
-        }
-        Err(OpenError::ConnectFailed) => error_exit("Failed to connect to mpv."),
-        Err(OpenError::WriteFailed) => error_exit("Failed to send the file to mpv."),
+        MpvInstance::Running { pid: Some(pid) } => mpv::activate_window(pid),
+        MpvInstance::Running { pid: None } => {}
+        MpvInstance::Launched => {}
     }
 }
 
