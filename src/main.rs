@@ -198,7 +198,7 @@ fn open_in_mpv(file: &str, loadfile_flags: &str) -> Result<MpvInstance, OpenErro
     }
 }
 
-fn play(files: &[String], loadfile_flags: &str) {
+fn open(files: &[String], loadfile_flags: &str) {
     let Some(file) = first_non_empty_file(files) else {
         return;
     };
@@ -247,6 +247,6 @@ fn main() {
     match find_command(&arguments.options) {
         Some(Command::Register) => register(loadfile_flags),
         Some(Command::Unregister) => unregister(),
-        None => play(&arguments.files, loadfile_flags),
+        None => open(&arguments.files, loadfile_flags),
     }
 }
