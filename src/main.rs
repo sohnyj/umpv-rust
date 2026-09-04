@@ -171,6 +171,7 @@ fn launch_mpv(file: &str) {
             error_exit(&format!("Failed to launch mpv.exe: {error}"))
         }
         Err(mpv::Error::Exited) => error_exit("mpv.exe exited before it opened the file."),
+        Err(mpv::Error::WaitFailed) => error_exit("Failed to wait for mpv.exe."),
         Err(mpv::Error::StartupTimedOut) => error_exit("Timed out waiting for mpv.exe to start."),
     }
 }

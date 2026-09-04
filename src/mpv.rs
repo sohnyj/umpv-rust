@@ -1,8 +1,10 @@
+use std::os::windows::io::AsRawHandle;
 use std::path::Path;
 use std::process::{Child, Command};
 use std::time::{Duration, Instant};
 
-use windows_sys::Win32::Foundation::{FALSE, HWND};
+use windows_sys::Win32::Foundation::{FALSE, HWND, WAIT_OBJECT_0, WAIT_TIMEOUT};
+use windows_sys::Win32::System::Threading::WaitForSingleObject;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     AllowSetForegroundWindow, FindWindowExW, GetWindowThreadProcessId, IsIconic, SW_RESTORE,
     SetForegroundWindow, ShowWindow,
@@ -14,36 +16,40 @@ use crate::pipe;
 pub(crate) enum Error {
     SpawnFailed(std::io::Error),
     Exited,
+    WaitFailed,
     StartupTimedOut,
 }
 
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(5);
-const POLL_INTERVAL: Duration = Duration::from_millis(5);
+const POLL_INTERVAL_MILLISECONDS: u32 = 5;
 
 pub(crate) fn launch(mpv_path: &Path, file: &str) -> Result<(), Error> {
-    let mut mpv_process = Command::new(mpv_path)
+    let mpv_process = Command::new(mpv_path)
         .arg(format!("--input-ipc-server={}", pipe::path()))
         .arg("--")
         .arg(file)
         .spawn()
         .map_err(Error::SpawnFailed)?;
     unsafe { AllowSetForegroundWindow(mpv_process.id()) };
-    wait_for_ipc_server(&mut mpv_process)
+    wait_for_ipc_server(&mpv_process)
 }
 
-fn wait_for_ipc_server(mpv_process: &mut Child) -> Result<(), Error> {
+fn wait_for_ipc_server(mpv_process: &Child) -> Result<(), Error> {
     let timeout_at = Instant::now() + STARTUP_TIMEOUT;
     loop {
         if pipe::server_exists() {
             return Ok(());
         }
-        if matches!(mpv_process.try_wait(), Ok(Some(_))) {
-            return Err(Error::Exited);
-        }
         if Instant::now() >= timeout_at {
             return Err(Error::StartupTimedOut);
         }
-        std::thread::sleep(POLL_INTERVAL);
+        match unsafe {
+            WaitForSingleObject(mpv_process.as_raw_handle(), POLL_INTERVAL_MILLISECONDS)
+        } {
+            WAIT_TIMEOUT => {}
+            WAIT_OBJECT_0 => return Err(Error::Exited),
+            _ => return Err(Error::WaitFailed),
+        }
     }
 }
 
