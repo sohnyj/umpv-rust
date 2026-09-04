@@ -1,10 +1,8 @@
-use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, Command};
 use std::time::{Duration, Instant};
 
 use windows_sys::Win32::Foundation::{FALSE, HWND};
-use windows_sys::Win32::System::Threading::CREATE_NEW_PROCESS_GROUP;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     AllowSetForegroundWindow, FindWindowExW, GetWindowThreadProcessId, IsIconic, SW_RESTORE,
     SetForegroundWindow, ShowWindow,
@@ -27,7 +25,6 @@ pub(crate) fn launch(mpv_path: &Path, file: &str) -> Result<(), Error> {
         .arg(format!("--input-ipc-server={}", pipe::path()))
         .arg("--")
         .arg(file)
-        .creation_flags(CREATE_NEW_PROCESS_GROUP)
         .spawn()
         .map_err(Error::SpawnFailed)?;
     unsafe { AllowSetForegroundWindow(mpv_process.id()) };
@@ -75,7 +72,6 @@ fn find_window(pid: u32) -> Option<HWND> {
 }
 
 pub(crate) fn activate_window(pid: u32) {
-    unsafe { AllowSetForegroundWindow(pid) };
     let Some(hwnd) = find_window(pid) else {
         return;
     };

@@ -55,7 +55,11 @@ fn write_prog_id(command: &str) -> windows_registry::Result<()> {
 }
 
 fn set_associations<'a>(extensions: impl IntoIterator<Item = &'a str>, prog_id: &str) -> usize {
-    let Ok(key) = CURRENT_USER.create(SUBKEY_FILE_ASSOCIATIONS) else {
+    let Ok(key) = CURRENT_USER
+        .options()
+        .write()
+        .open(SUBKEY_FILE_ASSOCIATIONS)
+    else {
         return 0;
     };
     let mut count = 0;
@@ -96,17 +100,13 @@ pub(crate) struct Unregistered {
 
 pub(crate) fn unregister() -> Unregistered {
     let associations = read_associations();
-    let umpv_extensions: Vec<&str> = associations
-        .iter()
-        .filter(|association| association.prog_id == UMPV_PROG_ID)
-        .map(|association| association.extension.as_str())
-        .collect();
-
-    let extension_count = if umpv_extensions.is_empty() {
-        0
-    } else {
-        set_associations(umpv_extensions, MPV_PROG_ID)
-    };
+    let extension_count = set_associations(
+        associations
+            .iter()
+            .filter(|association| association.prog_id == UMPV_PROG_ID)
+            .map(|association| association.extension.as_str()),
+        MPV_PROG_ID,
+    );
     let removed_prog_id = CURRENT_USER.remove_tree(SUBKEY_UMPV_PROG_ID).is_ok();
 
     if extension_count > 0 || removed_prog_id {

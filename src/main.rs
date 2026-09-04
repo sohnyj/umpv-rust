@@ -100,13 +100,6 @@ fn absolute_file_path(file: &str) -> String {
     }
 }
 
-fn first_non_empty_file(files: &[String]) -> Option<&str> {
-    files
-        .iter()
-        .map(String::as_str)
-        .find(|file| !file.is_empty())
-}
-
 const LOADFILE_OPTION_PREFIX: &str = "--loadfile=";
 const DEFAULT_LOADFILE_FLAGS: &str = "replace";
 
@@ -204,7 +197,7 @@ fn open_in_mpv(file: &str, loadfile_flags: &str) -> Option<u32> {
 }
 
 fn open(files: &[String], loadfile_flags: &str) {
-    let Some(file) = first_non_empty_file(files) else {
+    let Some(file) = files.first() else {
         return;
     };
     if has_url_scheme(file) {
