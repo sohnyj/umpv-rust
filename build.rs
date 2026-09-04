@@ -1,7 +1,7 @@
 fn main() {
-    println!("cargo:rerun-if-changed=res/umpv.ico");
-    println!("cargo:rerun-if-changed=res/umpv.manifest");
-    println!("cargo:rerun-if-changed=res/umpv.rc");
+    println!("cargo::rerun-if-changed=res/umpv.ico");
+    println!("cargo::rerun-if-changed=res/umpv.manifest");
+    println!("cargo::rerun-if-changed=res/umpv.rc");
 
     let output_directory = std::env::var("OUT_DIR").unwrap();
     let resource_path = format!("{output_directory}/umpv.res");
@@ -10,5 +10,5 @@ fn main() {
         .status()
         .expect("failed to run llvm-rc");
     assert!(status.success(), "llvm-rc failed");
-    println!("cargo:rustc-link-arg={resource_path}");
+    println!("cargo::rustc-link-arg={resource_path}");
 }
