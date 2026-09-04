@@ -75,18 +75,18 @@ pub(crate) fn register(command: &str) -> Result<usize, Error> {
 
     write_prog_id(command).map_err(|_| Error::ProgIdWriteFailed)?;
 
-    let count = set_associations(
+    let extension_count = set_associations(
         associations
             .iter()
             .map(|association| association.extension.as_str()),
         UMPV_PROG_ID,
     );
-    if count == 0 {
+    if extension_count == 0 {
         return Err(Error::NoExtensionsRegistered);
     }
 
     notify_shell_change();
-    Ok(count)
+    Ok(extension_count)
 }
 
 pub(crate) struct Unregistered {

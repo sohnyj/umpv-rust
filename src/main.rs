@@ -110,7 +110,7 @@ fn first_non_empty_file(files: &[String]) -> Option<&str> {
 const LOADFILE_OPTION_PREFIX: &str = "--loadfile=";
 const DEFAULT_LOADFILE_FLAGS: &str = "replace";
 
-fn find_loadfile_flags(options: &[String]) -> &str {
+fn loadfile_flags_or_default(options: &[String]) -> &str {
     options
         .iter()
         .find_map(|option| option.strip_prefix(LOADFILE_OPTION_PREFIX))
@@ -138,8 +138,8 @@ fn register(loadfile_flags: &str) {
     );
 
     match registry::register(&command) {
-        Ok(count) => show_information(&format!(
-            "Registered for {count} file extension(s).\nloadfile: {loadfile_flags}"
+        Ok(extension_count) => show_information(&format!(
+            "Registered for {extension_count} file extension(s).\nloadfile: {loadfile_flags}"
         )),
         Err(registry::Error::NoAssociations) => {
             error_exit("No mpv file associations found.\nRun 'mpv.exe --register' first.")
@@ -192,7 +192,7 @@ fn open_in_mpv(file: &str, loadfile_flags: &str) -> Option<u32> {
         }
     };
 
-    match pipe::send_file(file, loadfile_flags) {
+    match pipe::send_loadfile(file, loadfile_flags) {
         Ok(pid) => pid,
         Err(pipe::Error::NoServer) => {
             launch_mpv(file);
@@ -222,7 +222,7 @@ fn main() {
     if let Some(option) = find_unknown_option(&arguments.options) {
         error_exit(&format!("Unknown option: {option}"));
     }
-    let loadfile_flags = find_loadfile_flags(&arguments.options);
+    let loadfile_flags = loadfile_flags_or_default(&arguments.options);
     if !is_supported_loadfile_flags(loadfile_flags) {
         error_exit(&format!("Unsupported loadfile flags: {loadfile_flags}"));
     }

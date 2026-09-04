@@ -97,7 +97,7 @@ fn loadfile_command(file: &str, loadfile_flags: &str) -> String {
     format!("raw loadfile \"{escaped}\" {loadfile_flags}\n")
 }
 
-pub(crate) fn send_file(file: &str, loadfile_flags: &str) -> Result<Option<u32>, Error> {
+pub(crate) fn send_loadfile(file: &str, loadfile_flags: &str) -> Result<Option<u32>, Error> {
     let mut pipe = connect()?;
     let pid = server_pid(&pipe);
     pipe.write_all(loadfile_command(file, loadfile_flags).as_bytes())
